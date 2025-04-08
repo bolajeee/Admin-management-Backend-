@@ -1,6 +1,8 @@
 import { generateToken } from '../lib/utils/utils.js'
 import User from '../models/user.model.js'
 import bcrypt from "bcryptjs"
+import cloudinary from "../lib/cloudinary.js"
+
 
 export const signupUser = async (req, res) => {
     const { name, email, password } = req.body
@@ -107,35 +109,38 @@ export const logoutUser = (req, res) => {
 
 export const updateProfile = async (req, res) => {
     try {
-        const { profilepic } = req.body
+        const { profilePic } = req.body
         const userId = req.user._id
 
-        if (!profilepic) {
+        if (!profilePic) {
             return res.status(400).json({ message: "Please fill all the fields" })
         }
 
-        const uploadResponse = await cloudinary.uploader.upload(profilepic, {
+        //upload the profile picture to cloudinary
+        const uploadResponse = await cloudinary.uploader.upload(profilePic, {
             folder: "profilepics",
             width: 150,
             height: 150,
             crop: "fill",
-        }, (err, result) => {
-            if (err) {
-                console.error(err)
-                return res.status(500).json({ message: "Internal server error" })
-            }
-            return result
         })
 
-        const updatedProfilePic = User.findByIdAndUpdate(userId, { profilepic: uploadResponse.secure_url }, { new: true })
+        const updatedProfile = await User.findByIdAndUpdate(
+            userId,
+            { profilePic: uploadResponse.secure_url },
+            { new: true }
+        )
 
-        res.status(200).json({ message: "Profile updated successfully", profilepic: updatedProfilePic })
+        res.status(200).json({
+            message: "Profile updated successfully",
+            profilePic: updatedProfile.profilePic,
+        })
 
     } catch (error) {
-        console.log(`"error in updateProfile controller." ${error.message}`)
+        console.error("Error in updateProfile controller:", error.message)
         res.status(500).json({ message: "Internal server error" })
     }
 }
+
 
 export const checkAuthStatus = async (req, res) => {
     try {
