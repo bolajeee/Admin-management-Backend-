@@ -21,7 +21,7 @@ const App = () => {
   }, [])
 
   if(isCheckingAuth && !authUser) return (
-      <div className='felx items-center justify-center h-screen'>
+      <div className='flex items-center justify-center h-screen'>
         <Loader className="size-10 animate-spin" />
       </div>
     )

@@ -4,6 +4,8 @@ import bcrypt from "bcryptjs"
 import cloudinary from "../lib/cloudinary.js"
 
 
+
+
 export const signupUser = async (req, res) => {
     const { name, email, password } = req.body
 
@@ -107,39 +109,44 @@ export const logoutUser = (req, res) => {
     }
 }
 
-export const updateProfile = async (req, res) => {
-    try {
-        const { profilePic } = req.body
-        const userId = req.user._id
 
-        if (!profilePic) {
-            return res.status(400).json({ message: "Please fill all the fields" })
+export const updateProfile = async (req, res) => {
+    async function handleUpload(file) {
+        return await cloudinary.uploader.upload(file, { resource_type: "auto" });
+    }
+
+    try {
+        const userId = req.user._id;
+
+        if (!req.file) {
+            return res.status(400).json({ message: "Please upload a profile picture" });
         }
 
-        //upload the profile picture to cloudinary
-        const uploadResponse = await cloudinary.uploader.upload(profilePic, {
-            folder: "profilepics",
-            width: 150,
-            height: 150,
-            crop: "fill",
-        })
+        // Convert to base64 data URI
+        const b64 = Buffer.from(req.file.buffer).toString("base64");
+        const dataURI = `data:${req.file.mimetype};base64,${b64}`;
 
-        const updatedProfile = await User.findByIdAndUpdate(
-            userId,
-            { profilePic: uploadResponse.secure_url },
-            { new: true }
-        )
+        const cldRes = await handleUpload(dataURI);
 
-        res.status(200).json({
-            message: "Profile updated successfully",
-            profilePic: updatedProfile.profilePic,
-        })
+        if (cldRes) {
+            const updatedProfile = await User.findByIdAndUpdate(
+                userId,
+                { profilePicture: cldRes.secure_url },
+                { new: true }
+            );
 
+            return res.status(200).json({
+                message: "Profile updated successfully",
+                profilePicture: updatedProfile.profilePicture,
+            });
+        }
     } catch (error) {
-        console.error("Error in updateProfile controller:", error.message)
-        res.status(500).json({ message: "Internal server error" })
+        console.error("Error in updateProfile controller:", error.message);
+        res.status(500).json({ message: "Internal server error" });
     }
-}
+};
+
+
 
 
 export const checkAuthStatus = async (req, res) => {

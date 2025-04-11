@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useAuthStore } from "../store/useAuthStore";
 import { Camera, Mail, User } from "lucide-react";
+import toast from "react-hot-toast";
 
 const ProfilePage = () => {
   const { authUser, isUpdatingProfile, updateProfile } = useAuthStore();
@@ -10,21 +11,35 @@ const ProfilePage = () => {
     const file = e.target.files[0];
     if (!file) return;
 
-    const reader = new FileReader();
 
-    reader.readAsDataURL(file);
+    // Show selected image in preview
+    setSelectedImg(URL.createObjectURL(file));
 
-    reader.onload = async () => {
-      const base64Image = reader.result;
-      
-      await updateProfile({ profilePic: base64Image });
+    // Prepare file for upload
+    const formData = new FormData();
+    formData.append("profilePic", file); // ✅ 'profilePic' must match multer field name
 
-      setSelectedImg(base64Image);
-    };
-    reader.onerror = (error) => {
-      console.error("Error reading the file:", error);
-    };
+    try {
+      const res = await fetch("http://localhost:5000/api/auth/updateProfile", {
+        method: "PUT",
+        body: formData, // ✅ multipart/form-data
+        credentials: "include"
+      });
+
+      const data = await res.json();
+      console.log("Upload successful:", data);
+
+      if (data.profilePicture) {
+        setSelectedImg(data.profilePicture);
+      }
+
+      toast.success("Profile picture updated successfully");
+    } catch (err) {
+      console.error("Upload error:", err);
+      toast.error("Profile picture upload error")
+    }
   };
+
 
   return (
     <div className="h-screen pt-20">
@@ -40,7 +55,7 @@ const ProfilePage = () => {
           <div className="flex flex-col items-center gap-4">
             <div className="relative">
               <img
-                src={selectedImg || authUser?.profilePic || "/avatar.png"}
+                src={selectedImg || authUser?.profilePicture || "/avatar.png"}
                 alt="Profile"
                 className="size-32 rounded-full object-cover border-4 "
               />
