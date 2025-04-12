@@ -4,7 +4,7 @@ import { getMessages, getUsers, sendMessage } from "../controllers/message.contr
 
 const router = express.Router()
 
-router.get("/user", protectRoute, getUsers)
+router.get("/users", protectRoute, getUsers)
 router.get("/user/:id", protectRoute, getMessages)
 router.post("/user/:id", protectRoute, sendMessage)
 

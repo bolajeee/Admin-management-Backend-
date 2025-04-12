@@ -7,38 +7,22 @@ const ProfilePage = () => {
   const { authUser, isUpdatingProfile, updateProfile } = useAuthStore();
   const [selectedImg, setSelectedImg] = useState(null);
 
-  const handleImageUpload = async (e) => {
+
+  const handleImageUpload = (e) => {
     const file = e.target.files[0];
     if (!file) return;
-
-
+  
     // Show selected image in preview
     setSelectedImg(URL.createObjectURL(file));
-
+  
     // Prepare file for upload
     const formData = new FormData();
-    formData.append("profilePic", file); // ✅ 'profilePic' must match multer field name
-
-    try {
-      const res = await fetch("http://localhost:5000/api/auth/updateProfile", {
-        method: "PUT",
-        body: formData, // ✅ multipart/form-data
-        credentials: "include"
-      });
-
-      const data = await res.json();
-      console.log("Upload successful:", data);
-
-      if (data.profilePicture) {
-        setSelectedImg(data.profilePicture);
-      }
-
-      toast.success("Profile picture updated successfully");
-    } catch (err) {
-      console.error("Upload error:", err);
-      toast.error("Profile picture upload error")
-    }
+    formData.append("profilePic", file);
+  
+    // Use zustand action
+    updateProfile(formData);
   };
+  
 
 
   return (
