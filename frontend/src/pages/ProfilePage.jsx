@@ -11,18 +11,18 @@ const ProfilePage = () => {
   const handleImageUpload = (e) => {
     const file = e.target.files[0];
     if (!file) return;
-  
+
     // Show selected image in preview
     setSelectedImg(URL.createObjectURL(file));
-  
+
     // Prepare file for upload
     const formData = new FormData();
     formData.append("profilePic", file);
-  
+
     // Use zustand action
     updateProfile(formData);
   };
-  
+
 
 
   return (
