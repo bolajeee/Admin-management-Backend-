@@ -6,17 +6,15 @@ import { Users } from "lucide-react";
 
 const Sidebar = () => {
   const { getUsers, users, selectedUser, setSelectedUser, isUserLoading } = useChatStore();
-  const onlineUsers = [];
+
+  const { onlineUsers } = useAuthStore((state) => state);
 
   useEffect(() => {
     getUsers();
-    console.log("Fetching users...");
+    // console.log("Fetching users...");
   }, []);
 
-  // Debug: Log the users array to see if it contains data
-  useEffect(() => {
-    console.log("Users data:", users);
-  }, [users]);
+
 
   if (isUserLoading) return <SidebarSkeleton />;
   

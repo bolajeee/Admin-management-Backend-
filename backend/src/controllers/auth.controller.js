@@ -63,10 +63,12 @@ export const signupUser = async (req, res) => {
 export const loginUser = async (req, res) => {
     const { email, password } = req.body
 
+    console.log("Login data", req.body)
     //validate the data
     if (!email || !password) {
         return res.status(400).json({ message: "Please fill all the fields" })
     }
+
 
     //check if the user exists
     try {
@@ -84,6 +86,7 @@ export const loginUser = async (req, res) => {
             return res.status(400).json({ message: "Invalid email or password" })
         }
 
+        //check the need to gen token again?
         generateToken(user._id, res)
 
         res.status(200).json({
@@ -145,7 +148,6 @@ export const updateProfile = async (req, res) => {
         res.status(500).json({ message: "Internal server error" });
     }
 };
-
 
 
 

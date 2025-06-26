@@ -8,7 +8,7 @@ const storage = multer.memoryStorage()
 const upload = multer({ storage })
 
 router.post("/signup", signupUser);
-router.post("/login",loginUser);
+router.post("/login", loginUser);
 router.post("/logout", logoutUser);
 
 //protected routes
