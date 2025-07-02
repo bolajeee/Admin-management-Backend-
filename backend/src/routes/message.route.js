@@ -5,7 +5,7 @@ import { getMessages, getUsers, sendMessage } from "../controllers/message.contr
 const router = express.Router()
 
 router.get("/users", protectRoute, getUsers)
-router.get("/messages/:id", protectRoute, getMessages)
+router.get("/userMessage/:id", protectRoute, getMessages)
 router.post("/user/:id", protectRoute, sendMessage)
 
 export default router
