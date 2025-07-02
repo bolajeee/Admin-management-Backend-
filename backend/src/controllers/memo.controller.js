@@ -87,6 +87,121 @@ export const createMemo = async (req, res, next) => {
 };
 
 /**
+ * @desc    Get all memos (admin only)
+ * @route   GET /api/memos/all
+ * @access  Private/Admin
+ */
+export const getAllMemos = async (req, res, next) => {
+    try {
+        const {
+            status,
+            severity,
+            page = 1,
+            limit = 20,
+            sortBy = 'createdAt',
+            sortOrder = 'desc',
+            search
+        } = req.query;
+
+        const query = {};
+
+        if (status && Object.values(memoStatus).includes(status)) {
+            query.status = status;
+        }
+        if (severity && Object.values(memoSeverity).includes(severity)) {
+            query.severity = severity;
+        }
+        if (search) {
+            query.$or = [
+                { title: { $regex: search, $options: 'i' } },
+                { content: { $regex: search, $options: 'i' } }
+            ];
+        }
+
+        const [memos, total] = await Promise.all([
+            Memo.find(query)
+                .populate('createdBy', 'name email profilePicture')
+                .populate('recipients', 'name email')
+                .sort({ [sortBy]: sortOrder === 'desc' ? -1 : 1 })
+                .skip((page - 1) * limit)
+                .limit(parseInt(limit)),
+            Memo.countDocuments(query)
+        ]);
+
+        res.json({
+            success: true,
+            data: memos,
+            pagination: {
+                total,
+                page: parseInt(page),
+                limit: parseInt(limit),
+                totalPages: Math.ceil(total / limit)
+            }
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
+/**
+ * @desc    Get memos for a specific user (admin only)
+ * @route   GET /api/memos/user/:userId
+ * @access  Private/Admin
+ */
+export const getMemosForUser = async (req, res, next) => {
+    try {
+        const { userId } = req.params;
+        const {
+            status,
+            severity,
+            page = 1,
+            limit = 20,
+            sortBy = 'createdAt',
+            sortOrder = 'desc',
+            search
+        } = req.query;
+
+        const query = { recipients: userId };
+
+        if (status && Object.values(memoStatus).includes(status)) {
+            query.status = status;
+        }
+        if (severity && Object.values(memoSeverity).includes(severity)) {
+            query.severity = severity;
+        }
+        if (search) {
+            query.$or = [
+                { title: { $regex: search, $options: 'i' } },
+                { content: { $regex: search, $options: 'i' } }
+            ];
+        }
+
+        const [memos, total] = await Promise.all([
+            Memo.find(query)
+                .populate('createdBy', 'name email profilePicture')
+                .populate('recipients', 'name email')
+                .sort({ [sortBy]: sortOrder === 'desc' ? -1 : 1 })
+                .skip((page - 1) * limit)
+                .limit(parseInt(limit)),
+            Memo.countDocuments(query)
+        ]);
+
+        res.json({
+            success: true,
+            data: memos,
+            pagination: {
+                total,
+                page: parseInt(page),
+                limit: parseInt(limit),
+                totalPages: Math.ceil(total / limit)
+            }
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
+/**
  * @desc    Get memos for the authenticated user
  * @route   GET /api/memos
  * @access  Private
