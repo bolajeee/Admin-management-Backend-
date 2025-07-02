@@ -12,7 +12,7 @@ const messageSchema = new mongoose.Schema({
         type: mongoose.Schema.Types.ObjectId,
         ref: "User",
         required: true,
-        index: true
+
     },
     receiver: {
         type: mongoose.Schema.Types.ObjectId,
@@ -45,7 +45,7 @@ const messageSchema = new mongoose.Schema({
 }, {
     timestamps: true,
     toJSON: {
-        transform: function(doc, ret) {
+        transform: function (doc, ret) {
             ret.id = ret._id;
             delete ret._id;
             delete ret.__v;
@@ -60,27 +60,27 @@ messageSchema.index({ status: 1 });
 messageSchema.index({ createdAt: -1 });
 
 // Static methods
-messageSchema.statics.markAsDelivered = async function(messageId, receiverId) {
+messageSchema.statics.markAsDelivered = async function (messageId, receiverId) {
     return this.findOneAndUpdate(
         { _id: messageId, receiver: receiverId, status: messageStatus.SENT },
-        { 
-            $set: { 
+        {
+            $set: {
                 status: messageStatus.DELIVERED,
-                deliveredAt: new Date() 
-            } 
+                deliveredAt: new Date()
+            }
         },
         { new: true }
     );
 };
 
-messageSchema.statics.markAsRead = async function(messageId, receiverId) {
+messageSchema.statics.markAsRead = async function (messageId, receiverId) {
     return this.findOneAndUpdate(
         { _id: messageId, receiver: receiverId, status: { $in: [messageStatus.SENT, messageStatus.DELIVERED] } },
-        { 
-            $set: { 
+        {
+            $set: {
                 status: messageStatus.READ,
-                readAt: new Date() 
-            } 
+                readAt: new Date()
+            }
         },
         { new: true }
     );

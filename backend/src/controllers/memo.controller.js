@@ -11,11 +11,11 @@ import { NotFoundError, ForbiddenError, BadRequestError } from '../utils/errors.
  */
 export const createMemo = async (req, res, next) => {
     try {
-        const { 
-            title, 
-            content, 
+        const {
+            title,
+            content,
             summary = '',
-            severity = memoSeverity.LOW, 
+            severity = memoSeverity.LOW,
             recipients = [],
             deadline,
             expiresAt,
@@ -56,7 +56,7 @@ export const createMemo = async (req, res, next) => {
         });
 
         await memo.save();
-        
+
         // Populate the created memo with user data
         const populatedMemo = await Memo.findById(memo._id)
             .populate('createdBy', 'name email profilePicture')
@@ -93,7 +93,7 @@ export const createMemo = async (req, res, next) => {
  */
 export const getUserMemos = async (req, res, next) => {
     try {
-        const { 
+        const {
             status = 'active',
             severity,
             page = 1,
@@ -110,7 +110,7 @@ export const getUserMemos = async (req, res, next) => {
 
         // Build query
         const query = { recipients: req.user._id };
-        
+
         // Filter by status
         if (status === 'active') {
             query.$or = [
@@ -179,9 +179,9 @@ export const getMemoById = async (req, res, next) => {
                 { createdBy: req.user._id }
             ]
         })
-        .populate('createdBy', 'name email profilePicture')
-        .populate('recipients', 'name email')
-        .populate('acknowledgments.user', 'name email profilePicture');
+            .populate('createdBy', 'name email profilePicture')
+            .populate('recipients', 'name email')
+            .populate('acknowledgments.user', 'name email profilePicture');
 
         if (!memo) {
             throw new NotFoundError('Memo not found or access denied');
@@ -201,7 +201,7 @@ export const getMemoById = async (req, res, next) => {
  * @route   PATCH /api/memos/:id/read
  * @access  Private
  */
-export const markAsRead = async (req, res, next) => {
+export const markMemoAsRead = async (req, res, next) => {
     try {
         const memo = await Memo.findOne({
             _id: req.params.id,
@@ -243,7 +243,7 @@ export const markAsRead = async (req, res, next) => {
 export const acknowledgeMemo = async (req, res, next) => {
     try {
         const { comments = '' } = req.body;
-        
+
         const memo = await Memo.findOne({
             _id: req.params.id,
             recipients: req.user._id
@@ -279,7 +279,7 @@ export const acknowledgeMemo = async (req, res, next) => {
 export const snoozeMemo = async (req, res, next) => {
     try {
         const { durationMinutes = 15, comments = '' } = req.body;
-        
+
         const memo = await Memo.findOne({
             _id: req.params.id,
             recipients: req.user._id
@@ -308,7 +308,7 @@ export const snoozeMemo = async (req, res, next) => {
 export const updateMemo = async (req, res, next) => {
     try {
         const { title, content, severity, recipients, deadline, expiresAt, status } = req.body;
-        
+
         const memo = await Memo.findOne({
             _id: req.params.id,
             createdBy: req.user._id
@@ -330,7 +330,7 @@ export const updateMemo = async (req, res, next) => {
         if (deadline) memo.deadline = new Date(deadline);
         if (expiresAt) memo.expiresAt = new Date(expiresAt);
         if (status) memo.status = status;
-        
+
         // Handle recipients update
         if (recipients && Array.isArray(recipients)) {
             // For non-admin users, validate recipients
@@ -348,16 +348,16 @@ export const updateMemo = async (req, res, next) => {
                     throw new ForbiddenError('Not authorized to add all specified recipients');
                 }
             }
-            
+
             memo.recipients = recipients;
             // Reset read status for new recipients
-            memo.readBy = memo.readBy.filter(entry => 
+            memo.readBy = memo.readBy.filter(entry =>
                 recipients.some(r => r.toString() === entry.user.toString())
             );
         }
 
         await memo.save();
-        
+
         // Emit real-time update
         io.emit('memo_updated', memo);
 
@@ -389,7 +389,7 @@ export const deleteMemo = async (req, res, next) => {
         // Soft delete by updating status
         memo.status = 'deleted';
         await memo.save();
-        
+
         // Or hard delete if needed
         // await Memo.findByIdAndDelete(req.params.id);
 

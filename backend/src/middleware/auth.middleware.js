@@ -3,33 +3,34 @@ import User from "../models/user.model.js";
 
 export const protectRoute = async (req, res, next) => {
     try {
-      let token = null;
-  
-      // ✅ Check in cookies
+        let token = null;
+
+        // Check for token in cookies
+        if (req.cookies && req.cookies.token) {
+            token = req.cookies.token;
+        }
+
+        // Optionally, check for token in Authorization header
+        else if (req.headers.authorization && req.headers.authorization.startsWith("Bearer ")) {
+            token = req.headers.authorization.split(" ")[1];
+        }
+
+        if (!token) {
+            return res.status(401).json({ message: "Not authorized, no token" });
+        }
+
+        // Verify token
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        const user = await User.findById(decoded.userId || decoded.id).select("-password");
+        if (!user) {
+            return res.status(401).json({ message: "Not authorized, user not found" });
+        }
+
+        req.user = user;
+        next();
     } catch (error) {
         console.error('Authentication error:', error);
-        
-        let message = 'Invalid or expired token';
-        let statusCode = 401;
-        let errorCode = 'INVALID_TOKEN';
-        
-        if (error.name === 'TokenExpiredError') {
-            message = 'Token has expired';
-            errorCode = 'TOKEN_EXPIRED';
-        } else if (error.name === 'JsonWebTokenError') {
-            message = 'Invalid token';
-            errorCode = 'INVALID_TOKEN';
-        } else {
-            statusCode = 500;
-            message = 'Authentication failed';
-            errorCode = 'AUTH_FAILED';
-        }
-        
-        return res.status(statusCode).json({ 
-            success: false,
-            message,
-            code: errorCode
-        });
+        return res.status(401).json({ message: "Not authorized, token failed" });
     }
 };
 
@@ -37,7 +38,7 @@ export const protectRoute = async (req, res, next) => {
 export const authorize = (roles = []) => {
     // Convert single role to array
     const allowedRoles = Array.isArray(roles) ? roles : [roles];
-    
+
     return async (req, res, next) => {
         try {
             // Check if user is authenticated
@@ -85,7 +86,7 @@ export const isOwner = (modelName, idParam = 'id') => {
         try {
             const Model = require(`../models/${modelName}.model.js`);
             const document = await Model.findById(req.params[idParam]);
-            
+
             if (!document) {
                 return res.status(404).json({
                     success: false,
@@ -122,7 +123,7 @@ export const isParticipant = (conversationIdParam = 'conversationId') => {
     return async (req, res, next) => {
         try {
             const conversationId = req.params[conversationIdParam];
-            
+
             // Check if user is a participant in the conversation
             const isParticipant = await Conversation.exists({
                 _id: conversationId,

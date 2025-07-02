@@ -77,19 +77,18 @@ const memoSchema = new mongoose.Schema({
     },
     expiresAt: {
         type: Date,
-        index: true,
-        required: function() {
+        required: function () {
             return this.severity !== memoSeverity.LOW;
         }
     },
     deadline: {
         type: Date,
         index: true,
-        required: function() {
+        required: function () {
             return this.severity !== memoSeverity.LOW;
         },
         validate: {
-            validator: function(v) {
+            validator: function (v) {
                 return !this.expiresAt || v <= this.expiresAt;
             },
             message: 'Deadline must be before or equal to expiration time'
@@ -103,7 +102,7 @@ const memoSchema = new mongoose.Schema({
 }, {
     timestamps: true,
     toJSON: {
-        transform: function(doc, ret) {
+        transform: function (doc, ret) {
             ret.id = ret._id;
             delete ret._id;
             delete ret.__v;
@@ -120,7 +119,7 @@ memoSchema.index({ 'acknowledgments.user': 1, status: 1 });
 memoSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 
 // Pre-save hook to set default expiration based on severity
-memoSchema.pre('save', function(next) {
+memoSchema.pre('save', function (next) {
     if (this.isNew && this.severity !== memoSeverity.LOW && !this.expiresAt) {
         const now = new Date();
         switch (this.severity) {
@@ -139,7 +138,7 @@ memoSchema.pre('save', function(next) {
 });
 
 // Static method to find active memos for a user
-memoSchema.statics.findActiveForUser = function(userId) {
+memoSchema.statics.findActiveForUser = function (userId) {
     return this.find({
         recipients: userId,
         status: memoStatus.ACTIVE,
@@ -151,9 +150,9 @@ memoSchema.statics.findActiveForUser = function(userId) {
 };
 
 // Method to acknowledge a memo
-memoSchema.methods.acknowledge = async function(userId, comments = '') {
+memoSchema.methods.acknowledge = async function (userId, comments = '') {
     const ackIndex = this.acknowledgments.findIndex(a => a.user.equals(userId));
-    
+
     if (ackIndex === -1) {
         this.acknowledgments.push({
             user: userId,
@@ -165,15 +164,15 @@ memoSchema.methods.acknowledge = async function(userId, comments = '') {
         this.acknowledgments[ackIndex].acknowledgedAt = new Date();
         this.acknowledgments[ackIndex].comments = comments;
     }
-    
+
     return this.save();
 };
 
 // Method to snooze a memo
-memoSchema.methods.snooze = async function(userId, durationMinutes = 15, comments = '') {
+memoSchema.methods.snooze = async function (userId, durationMinutes = 15, comments = '') {
     const ackIndex = this.acknowledgments.findIndex(a => a.user.equals(userId));
     const snoozeUntil = new Date(Date.now() + durationMinutes * 60 * 1000);
-    
+
     if (ackIndex === -1) {
         this.acknowledgments.push({
             user: userId,
@@ -186,7 +185,7 @@ memoSchema.methods.snooze = async function(userId, durationMinutes = 15, comment
         this.acknowledgments[ackIndex].snoozedUntil = snoozeUntil;
         this.acknowledgments[ackIndex].comments = comments;
     }
-    
+
     return this.save();
 };
 

@@ -22,11 +22,11 @@ export const signupUser = async (req, res) => {
 
     try {
         //check if the password is strong enough
-        const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&#])[A-Za-z\d@$!%*?&#]{8,}$/;
+        // const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&#])[A-Za-z\d@$!%*?&#]{8,}$/;
 
-        if (!passwordRegex.test(password)) {
-            return res.status(400).json({ message: "Password must be at least 8 characters long and contain at least one uppercase letter, one lowercase letter, one number and one special character" })
-        }
+        // if (!passwordRegex.test(password)) {
+        //     return res.status(400).json({ message: "Password must be at least 8 characters long and contain at least one uppercase letter, one lowercase letter, one number and one special character" })
+        // }
 
         //hash the password
         const salt = await bcrypt.genSalt(10)
@@ -55,13 +55,13 @@ export const signupUser = async (req, res) => {
             res.status(400).json({ message: "Invalid user data" })
         }
     } catch (error) {
-        console.error(error, "Error in signupUserController")
+        console.error(error, "Error in signup User Controller")
         res.status(500).json({ message: "Internal server error" })
     }
 }
 
 export const loginUser = async (req, res) => {
-    const { email, password } = req.body
+    const { email, password } = req.body || req.body.body
 
     console.log("Login data", req.body)
     //validate the data
@@ -91,12 +91,12 @@ export const loginUser = async (req, res) => {
 
         res.status(200).json({
             _id: user._id,
-            name: user.name,
             email: user.email,
             profilepic: user.profilePicture
         })
     } catch (error) {
         console.error("Error in login controller", error.message)
+        console.log()
     }
 }
 
