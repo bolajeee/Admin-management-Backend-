@@ -586,3 +586,17 @@ export const getMemoStats = async (req, res, next) => {
         next(error);
     }
 };
+
+/**
+ * @desc    Get memo count
+ * @route   GET /api/memos/count
+ * @access  Private
+ */
+export const getMemoCount = async (req, res) => {
+    try {
+        const count = await Memo.countDocuments();
+        res.json({ count });
+    } catch (error) {
+        res.status(500).json({ error: "Internal server error" });
+    }
+};

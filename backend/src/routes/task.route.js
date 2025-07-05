@@ -1,5 +1,5 @@
 import express from 'express';
-import { createTask, getTasks, updateTaskStatus, deleteTask } from '../controllers/task.controller.js';
+import { createTask, getTasks, updateTaskStatus, deleteTask, getTaskCount } from '../controllers/task.controller.js';
 import { protectRoute } from '../middleware/auth.middleware.js';
 
 const router = express.Router();
@@ -18,5 +18,8 @@ router.patch('/:taskId/status', updateTaskStatus);
 
 // Delete task
 router.delete('/:taskId', deleteTask);
+
+// Admin: Get task count
+router.get('/count', getTaskCount);
 
 export default router;

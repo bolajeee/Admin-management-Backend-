@@ -1,5 +1,5 @@
 import express from 'express';
-import { createMemo, getUserMemos, markMemoAsRead, deleteMemo, getAllMemos, getMemosForUser } from '../controllers/memo.controller.js';
+import { createMemo, getUserMemos, markMemoAsRead, deleteMemo, getAllMemos, getMemosForUser, getMemoCount } from '../controllers/memo.controller.js';
 import { protectRoute, authorize } from '../middleware/auth.middleware.js';
 
 const router = express.Router();
@@ -27,6 +27,9 @@ router.get('/all', authorize(['admin']), getAllMemos);
 
 // Admin: Get memos for a specific user
 router.get('/user/:userId', authorize(['admin']), getMemosForUser);
+
+// Admin: Get all memos
+router.get("/count", getMemoCount);
 
 
 export default router;

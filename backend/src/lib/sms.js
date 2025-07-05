@@ -21,7 +21,7 @@ export const sendSMS = async (to, message) => {
             from: twilioPhoneNumber,
             to: to
         });
-        
+
         console.log('SMS sent:', response.sid);
         return { success: true, sid: response.sid };
     } catch (error) {
@@ -36,9 +36,9 @@ export const sendMemoSMS = async (memo, phoneNumber) => {
     }
 
     const message = `New Memo: ${memo.title}\n` +
-                   `Severity: ${memo.severity}\n` +
-                   `${memo.summary || ''}\n` +
-                   `Deadline: ${memo.deadline ? new Date(memo.deadline).toLocaleString() : 'N/A'}`;
+        `Severity: ${memo.severity}\n` +
+        `${memo.summary || ''}\n` +
+        `Deadline: ${memo.deadline ? new Date(memo.deadline).toLocaleString() : 'N/A'}`;
 
     return await sendSMS(phoneNumber, message);
 };
@@ -49,9 +49,9 @@ export const sendTaskAssignmentSMS = async (task, phoneNumber) => {
     }
 
     const message = `New Task: ${task.title}\n` +
-                   `Priority: ${task.priority}\n` +
-                   `Due: ${task.dueDate ? new Date(task.dueDate).toLocaleDateString() : 'No due date'}\n` +
-                   `Status: ${task.status}`;
+        `Priority: ${task.priority}\n` +
+        `Due: ${task.dueDate ? new Date(task.dueDate).toLocaleDateString() : 'No due date'}\n` +
+        `Status: ${task.status}`;
 
     return await sendSMS(phoneNumber, message);
 };
