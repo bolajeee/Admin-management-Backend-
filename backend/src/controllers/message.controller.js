@@ -73,6 +73,21 @@ export const getEmployeeCount = async (req, res) => {
     }
 };
 
+export const getRecentMessages = async (req, res) => {
+    try {
+        // Fetch the 10 most recent messages, newest first
+        const messages = await Message.find({})
+            .sort({ createdAt: -1 })
+            .limit(5)
+            .populate('sender', 'name email profilePicture')
+            .populate('receiver', 'name email profilePicture');
+        res.status(200).json({ messages });
+    } catch (error) {
+        console.error("Error in getting recent messages: ", error.message);
+        res.status(500).json({ error: "internal server error" });
+    }
+};
+
 export const getTodayMessageCount = async (req, res) => {
     try {
         const startOfDay = new Date();
