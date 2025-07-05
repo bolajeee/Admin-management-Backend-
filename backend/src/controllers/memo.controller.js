@@ -144,6 +144,48 @@ export const getAllMemos = async (req, res, next) => {
 };
 
 /**
+ * @desc    Create a memo for every user (admin only)
+ * @route   POST /api/memos/broadcast
+ * @access  Private/Admin
+ */
+export const createMemoForAllUsers = async (req, res, next) => {
+    try {
+        const { title, content, summary = '', severity = memoSeverity.LOW, deadline, expiresAt, metadata = {} } = req.body;
+
+        // Only admin can broadcast
+        if (req.user.role !== 'admin') {
+            return res.status(403).json({ message: 'Forbidden: Only admin can broadcast memos.' });
+        }
+
+        // Get all user IDs
+        const users = await User.find({}, '_id');
+        const recipientIds = users.map(u => u._id);
+
+        const memo = new Memo({
+            title,
+            content,
+            summary,
+            severity,
+            recipients: recipientIds,
+            createdBy: req.user._id,
+            deadline: deadline ? new Date(deadline) : null,
+            expiresAt: expiresAt ? new Date(expiresAt) : null,
+            metadata
+        });
+
+        await memo.save();
+
+        res.status(201).json({
+            success: true,
+            data: memo,
+            message: "Memo sent to all users"
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
+/**
  * @desc    Get memos for a specific user (admin only)
  * @route   GET /api/memos/user/:userId
  * @access  Private/Admin

@@ -15,6 +15,7 @@ import Message from './models/message.model.js';
 import Memo from './models/memo.model.js';
 import Task from './models/task.model.js';
 import dashboardRoutes from "./routes/dashboard.route.js";
+import adminRoutes from "./routes/admin.route.js"
 
 
 const app = express();
@@ -32,6 +33,7 @@ app.use("/api/messages", messageRoute)
 app.use("/api/tasks", taskRoute)
 app.use("/api/memos", memoRoute)
 app.use("/api/dashboard", dashboardRoutes);
+app.use("/api/admin", adminRoutes)
 
 const port = process.env.PORT || 5000;
 
