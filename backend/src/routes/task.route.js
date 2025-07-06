@@ -13,6 +13,9 @@ router.post('/', createTask);
 // Get all tasks (with optional filters)
 router.get('/', getTasks);
 
+// Get tasks for a specific user
+router.get('/userTasks/:userId', getTasks);
+
 // Update task status
 router.patch('/:taskId/status', updateTaskStatus);
 

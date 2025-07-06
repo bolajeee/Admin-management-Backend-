@@ -44,6 +44,29 @@ export const getTasks = async (req, res) => {
     }
 };
 
+// Get tasks for a specific user
+export const getTasksForUser = async (req, res) => {
+  const userId = req.params.userId;
+  const { status, priority, severity } = req.query;
+
+  try {
+    const filter = { assignedTo: userId };
+
+    if (status) filter.status = status;
+    if (priority) filter.priority = priority;
+    if (severity) filter.severity = severity;
+
+    const tasks = await Task.find(filter)
+      .populate(['createdBy', 'assignedTo'])
+      .sort({ createdAt: -1 });
+
+    res.status(200).json(tasks);
+  } catch (error) {
+    console.error("Error fetching user-specific tasks:", error);
+    res.status(500).json({ error: "Failed to fetch tasks for user." });
+  }
+};
+
 // Update task status
 export const updateTaskStatus = async (req, res) => {
     try {

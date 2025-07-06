@@ -13,17 +13,15 @@ router.post('/', createMemo);
 // Get memos for current user
 router.get('/', getUserMemos);
 
+// Admin: Get all memos
+router.get('/all', authorize(['admin']), getAllMemos);
+
 // Mark memo as read
 router.patch('/:memoId/read', markMemoAsRead);
 
 // Delete memo
 router.delete('/:memoId', deleteMemo);
 
-
-// protected routes
-
-// Admin: Get all memos
-router.get('/all', authorize(['admin']), getAllMemos);
 
 // Admin: Get memos for a specific user
 router.get('/user/:userId', authorize(['admin']), getMemosForUser);
