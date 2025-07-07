@@ -149,16 +149,17 @@ export const updateProfile = async (req, res) => {
     }
 };
 
-
-
 export const checkAuthStatus = async (req, res) => {
-    try {
-        res.status(200).json(req.user)
-    } catch (error) {
-        console.error(`"error in checkAuthStatus controller." ${error.message}`)
-        res.status(500).json({ message: "Internal server error" })
+  try {
+    if (!req.user) {
+      return res.status(401).json({ message: "Unauthorized. Please login." });
     }
-}
+    res.status(200).json(req.user);
+  } catch (error) {
+    console.error(`Error in checkAuthStatus: ${error.message}`);
+    res.status(500).json({ message: "Internal server error" });
+  }
+};
 
 export const deleteUser = async (req, res) => {
     try {
@@ -172,4 +173,34 @@ export const deleteUser = async (req, res) => {
         console.error("Error deleting user:", error.message);
         res.status(500).json({ error: "Internal server error" });
     }
+};
+
+export const createUser = async (req, res) => {
+  const { name, email, role, password } = req.body;
+  
+  try {
+    // Validation and checks
+    if (!name || !email || !role) {
+      return res.status(400).json({ message: 'All fields are required' });
+    }
+
+     //hash the password
+        const salt = await bcrypt.genSalt(10)
+        const hashedPassword = await bcrypt.hash("default", salt)
+
+    // Create new employee user
+    const newUser = new User({
+      name,
+      email,
+      role, // Role could be 'employee', 'admin', etc.
+      password: hashedPassword, // Don't forget to hash the password
+    });
+
+    await newUser.save();
+
+    return res.status(201).json({ message: 'Employee added successfully', user: newUser });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Failed to add employee' });
+  }
 };
