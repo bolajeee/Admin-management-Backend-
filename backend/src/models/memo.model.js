@@ -3,7 +3,8 @@ import mongoose from 'mongoose';
 export const memoStatus = {
     ACTIVE: 'active',
     EXPIRED: 'expired',
-    CANCELLED: 'cancelled'
+    CANCELLED: 'cancelled',
+    DELETED: 'deleted' // Added deleted status for soft deletes
 };
 
 export const memoSeverity = {

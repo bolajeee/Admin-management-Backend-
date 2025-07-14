@@ -330,7 +330,7 @@ export const getUserMemos = async (req, res, next) => {
 export const getMemoById = async (req, res, next) => {
     try {
         const memo = await Memo.findOne({
-            _id: req.params.id,
+            _id: req.params.memoId,
             $or: [
                 { recipients: req.user._id },
                 { createdBy: req.user._id }
@@ -361,7 +361,7 @@ export const getMemoById = async (req, res, next) => {
 export const markMemoAsRead = async (req, res, next) => {
     try {
         const memo = await Memo.findOne({
-            _id: req.params.id,
+            _id: req.params.memoId,
             recipients: req.user._id,
             'readBy.user': { $ne: req.user._id }
         });
@@ -402,7 +402,7 @@ export const acknowledgeMemo = async (req, res, next) => {
         const { comments = '' } = req.body;
 
         const memo = await Memo.findOne({
-            _id: req.params.id,
+            _id: req.params.memoId,
             recipients: req.user._id
         });
 
@@ -438,7 +438,7 @@ export const snoozeMemo = async (req, res, next) => {
         const { durationMinutes = 15, comments = '' } = req.body;
 
         const memo = await Memo.findOne({
-            _id: req.params.id,
+            _id: req.params.memoId,
             recipients: req.user._id
         });
 
@@ -467,7 +467,7 @@ export const updateMemo = async (req, res, next) => {
         const { title, content, severity, recipients, deadline, expiresAt, status } = req.body;
 
         const memo = await Memo.findOne({
-            _id: req.params.id,
+            _id: req.params.memoId,
             createdBy: req.user._id
         });
 
@@ -475,18 +475,19 @@ export const updateMemo = async (req, res, next) => {
             throw new NotFoundError('Memo not found or access denied');
         }
 
-        // Only allow updates to active memos
-        if (memo.status !== 'active') {
-            throw new BadRequestError('Only active memos can be updated');
+        // Allow status changes even if the memo is not currently `active`
+        if (status && Object.values(memoStatus).includes(status)) {
+            memo.status = status;
         }
 
-        // Update fields if provided
-        if (title) memo.title = title;
-        if (content) memo.content = content;
-        if (severity) memo.severity = severity;
-        if (deadline) memo.deadline = new Date(deadline);
-        if (expiresAt) memo.expiresAt = new Date(expiresAt);
-        if (status) memo.status = status;
+        // Only allow other fields to be updated if the memo is `active`
+        if (memo.status === 'active') {
+            if (title) memo.title = title;
+            if (content) memo.content = content;
+            if (severity) memo.severity = severity;
+            if (deadline) memo.deadline = new Date(deadline);
+            if (expiresAt) memo.expiresAt = new Date(expiresAt);
+        }
 
         // Handle recipients update
         if (recipients && Array.isArray(recipients)) {
@@ -535,7 +536,7 @@ export const updateMemo = async (req, res, next) => {
 export const deleteMemo = async (req, res, next) => {
     try {
         const memo = await Memo.findOne({
-            _id: req.params.id,
+            _id: req.params.memoId,
             createdBy: req.user._id
         });
 
