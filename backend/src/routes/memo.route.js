@@ -1,5 +1,5 @@
 import express from 'express';
-import { createMemo, getUserMemos, markMemoAsRead, deleteMemo, getAllMemos, getMemosForUser, getMemoCount, createMemoForAllUsers, snoozeMemo, updateMemo } from '../controllers/memo.controller.js';
+import { createMemo, getUserMemos, markMemoAsRead, deleteMemo, getAllMemos, getMemosForUser, getMemoCount, createMemoForAllUsers, snoozeMemo, acknowledgeMemo, updateMemo } from '../controllers/memo.controller.js';
 import { protectRoute, authorize } from '../middleware/auth.middleware.js';
 
 const router = express.Router();
@@ -30,7 +30,10 @@ router.get('/user/:userId', authorize(['admin']), getMemosForUser);
 router.get("/count", authorize(['admin']), getMemoCount);
 
 // Create memo for every user
-router.post('/broadcast', authorize(['admin']), createMemoForAllUsers);
+router.post('/broadcast',  authorize(['admin']), createMemoForAllUsers);
+
+// Mark memo as acknowledged
+router.patch('/:memoId/acknowledge', acknowledgeMemo);
 
 // Snooze memo
 router.patch('/:memoId/snooze', snoozeMemo);

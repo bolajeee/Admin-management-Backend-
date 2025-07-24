@@ -3,7 +3,6 @@ import User from '../models/user.model.js';
 import { io } from '../index.js';
 import NotificationService from '../services/notification.service.js';
 import { NotFoundError, ForbiddenError, BadRequestError } from '../utils/errors.js';
-import mongoose from 'mongoose';
 
 /**
  * @desc    Create a new memo
@@ -178,7 +177,7 @@ export const createMemoForAllUsers = async (req, res, next) => {
 
         res.status(201).json({
             success: true,
-            memo,
+            data: memo,
             message: "Memo sent to all users"
         });
     } catch (error) {
@@ -360,60 +359,71 @@ export const getMemoById = async (req, res, next) => {
  * @access  Private
  */
 export const markMemoAsRead = async (req, res, next) => {
-    console.log('>> Incoming request to mark memo as read');
-    console.log('req.params.memoId:', req.params.memoId);
-    console.log('req.user:', req.user);
-
     try {
-        // Ensure valid ObjectId
-        if (!mongoose.Types.ObjectId.isValid(req.params.memoId)) {
-            console.warn('Invalid memo ID');
-            throw new NotFoundError('Invalid memo ID');
-        }
-
-        // Ensure user._id is a valid ObjectId
-        const userId = new mongoose.Types.ObjectId(req.user._id);
-
         const memo = await Memo.findOne({
             _id: req.params.memoId,
-            recipients: userId,
-            'acknowledgments.user': { $ne: userId }
+            recipients: req.user._id,
+            'readBy.user': { $ne: req.user._id }
         });
 
-        console.log('Memo found:', memo ? true : false);
-
         if (!memo) {
-            console.warn('Memo not found or already marked as read');
             throw new NotFoundError('Memo not found or already marked as read');
         }
 
-        const ackIndex = memo.acknowledgments.findIndex(a => a.user.equals(userId));
-        if (ackIndex === -1) {
-            memo.acknowledgments.push({
-                user: userId,
-                status: 'acknowledged',
-                acknowledgedAt: new Date()
-            });
-        } else {
-            memo.acknowledgments[ackIndex].status = 'acknowledged';
-            memo.acknowledgments[ackIndex].acknowledgedAt = new Date();
-        }
+        memo.readBy.push({
+            user: req.user._id,
+            readAt: new Date()
+        });
+
         await memo.save();
 
         // Emit real-time update
         io.to(req.user.socketId).emit('memo_read', {
             memoId: memo._id,
-            readBy: userId
+            readBy: req.user._id
         });
-
-        console.log('Socket event emitted to', req.user.socketId);
 
         res.json({
             success: true,
             message: 'Memo marked as read'
         });
     } catch (error) {
-        console.error('markMemoAsRead error:', error);
+        next(error);
+    }
+};
+
+/**
+ * @desc    Acknowledge a memo
+ * @route   PATCH /api/memos/:id/acknowledge
+ * @access  Private
+ */
+export const acknowledgeMemo = async (req, res, next) => {
+    try {
+        const { comments = '' } = req.body;
+
+        const memo = await Memo.findOne({
+            _id: req.params.memoId,
+            recipients: req.user._id
+        });
+
+        if (!memo) {
+            throw new NotFoundError('Memo not found or access denied');
+        }
+
+        await memo.acknowledge(req.user._id, comments);
+
+        // Emit real-time update
+        io.to(memo.createdBy.socketId).emit('memo_acknowledged', {
+            memoId: memo._id,
+            acknowledgedBy: req.user._id,
+            acknowledgedAt: new Date()
+        });
+
+        res.json({
+            success: true,
+            message: 'Memo acknowledged successfully'
+        });
+    } catch (error) {
         next(error);
     }
 };
@@ -525,32 +535,29 @@ export const updateMemo = async (req, res, next) => {
  */
 export const deleteMemo = async (req, res, next) => {
     try {
-        const memo = await Memo.findById(req.params.memoId);
-        if (!memo) throw new NotFoundError('Memo not found');
+        const memo = await Memo.findOne({
+            _id: req.params.memoId,
+            createdBy: req.user._id
+        });
 
-        const isAdmin = req.user.role === 'admin';
-        const globalDelete = req.query.global === 'true' && isAdmin;
-
-        if (globalDelete) {
-            memo.status = 'deleted';
-            await memo.save();
-            io.emit('memo_deleted', { memoId: memo._id });
-            return res.json({ success: true, message: 'Memo deleted globally' });
+        if (!memo) {
+            throw new NotFoundError('Memo not found or access denied');
         }
 
-        // Remove user from recipients and acknowledgments
-        memo.recipients = memo.recipients.filter(
-            id => id.toString() !== req.user._id.toString()
-        );
-        if (Array.isArray(memo.acknowledgments)) {
-            memo.acknowledgments = memo.acknowledgments.filter(
-                ack => ack.user.toString() !== req.user._id.toString()
-            );
-        }
+        // Soft delete by updating status
+        memo.status = 'deleted';
         await memo.save();
 
-        io.to(req.user.socketId).emit('memo_deleted', { memoId: memo._id, userId: req.user._id });
-        res.json({ success: true, message: 'Memo deleted for you' });
+        // Or hard delete if needed
+        // await Memo.findByIdAndDelete(req.params.id);
+
+        // Emit real-time update
+        io.emit('memo_deleted', { memoId: memo._id });
+
+        res.json({
+            success: true,
+            message: 'Memo deleted successfully'
+        });
     } catch (error) {
         next(error);
     }
