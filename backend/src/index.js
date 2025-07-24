@@ -26,26 +26,8 @@ import reportRoute from './routes/report.route.js';
 
 dotenv.config();
 
-<<<<<<< HEAD
 const app = express();
 const PORT = process.env.PORT || 5000;
-=======
-app.use(express.json());
-app.use(cookieParser())
-app.use(cors({
-    origin: "http://localhost:5173",
-    credentials: true
-}))
-
-app.use("/api/auth", authRoute)
-app.use("/api/messages", messageRoute)
-app.use("/api/tasks", taskRoute)
-app.use("/api/memos", memoRoute)
-app.use("/api/dashboard", dashboardRoutes);
-app.use("/api/admin", adminRoutes)
-
-const port = process.env.PORT || 5000;
->>>>>>> parent of 0b6b426 (Report and activity tracking routes)
 
 // Create HTTP server
 const server = createServer(app);
@@ -137,6 +119,7 @@ connectDB().then(() => {
   });
 });
 =======
+
     });
     
     // Handle message read receipt
@@ -285,7 +268,7 @@ export {io}
 
 
 
-app.use(errorHandler);
+
 connectDB().then(() => {
   // Initialize the report scheduler after DB connection
   reportScheduler.initialize();
