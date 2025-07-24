@@ -27,6 +27,7 @@ const generateDateRange = (startDate, endDate, count = 7) => {
 /**
  * Get overview metrics for the dashboard
  */
+
 export const getMetrics = async (req, res) => {
   try {
     // In a real app, these would be calculated from your database
@@ -43,15 +44,18 @@ export const getMetrics = async (req, res) => {
     
     res.status(200).json(metrics);
   } catch (error) {
-    console.error('Error in getMetrics:', error);
-    next(new InternalServerError('Failed to fetch metrics data'));
+
+
+    console.error('Error fetching metrics:', error);
+    res.status(500).json({ message: 'Failed to fetch metrics data' });
   }
 };
 
 /**
  * Get team performance data
  */
-export const getTeamPerformance = async (req, res, next) => {
+
+export const getTeamPerformance = async (req, res) => {
   try {
     // Get real user names from database for the demo
     const users = await User.find({ role: 'employee' })
@@ -66,15 +70,18 @@ export const getTeamPerformance = async (req, res, next) => {
     
     res.status(200).json({ performance });
   } catch (error) {
-    console.error('Error in getTeamPerformance:', error);
-    next(new InternalServerError('Failed to fetch team performance data'));
+
+
+    console.error('Error fetching team performance:', error);
+    res.status(500).json({ message: 'Failed to fetch team performance data' });
   }
 };
 
 /**
  * Get client activity data
  */
-export const getClientActivity = async (req, res, next) => {
+
+export const getClientActivity = async (req, res) => {
   try {
     const { startDate, endDate } = req.query;
     const dates = generateDateRange(startDate, endDate);
@@ -88,15 +95,18 @@ export const getClientActivity = async (req, res, next) => {
     
     res.status(200).json({ activity });
   } catch (error) {
-    console.error('Error in getClientActivity:', error);
-    next(new InternalServerError('Failed to fetch client activity data'));
+
+
+    console.error('Error fetching client activity:', error);
+    res.status(500).json({ message: 'Failed to fetch client activity data' });
   }
 };
 
 /**
  * Get financial revenue data
  */
-export const getFinanceRevenue = async (req, res, next) => {
+
+export const getFinanceRevenue = async (req, res) => {
   try {
     const { startDate, endDate } = req.query;
     const dates = generateDateRange(startDate, endDate);
@@ -109,15 +119,18 @@ export const getFinanceRevenue = async (req, res, next) => {
     
     res.status(200).json({ data });
   } catch (error) {
-    console.error('Error in getFinanceRevenue:', error);
-    next(new InternalServerError('Failed to fetch financial revenue data'));
+
+
+    console.error('Error fetching finance revenue:', error);
+    res.status(500).json({ message: 'Failed to fetch financial revenue data' });
   }
 };
 
 /**
  * Get financial categories data
  */
-export const getFinanceCategories = async (req, res, next) => {
+
+export const getFinanceCategories = async (req, res) => {
   try {
     // Mock expense categories
     const categories = [
@@ -137,15 +150,18 @@ export const getFinanceCategories = async (req, res, next) => {
     
     res.status(200).json({ data });
   } catch (error) {
-    console.error('Error in getFinanceCategories:', error);
-    next(new InternalServerError('Failed to fetch financial categories data'));
+
+
+    console.error('Error fetching finance categories:', error);
+    res.status(500).json({ message: 'Failed to fetch financial categories data' });
   }
 };
 
 /**
  * Export report as Excel file
  */
-export const exportReport = async (req, res, next) => {
+
+export const exportReport = async (req, res) => {
   try {
     const { type } = req.query;
     
@@ -196,6 +212,36 @@ export const exportReport = async (req, res, next) => {
           profit: revenue - expenses
         });
       }
+
+
+    } else if (type === 'clients') {
+      // Set up headers
+      // Generic report
+      worksheet.columns = [
+
+
+        { header: 'Interactions', key: 'interactions', width: 15 },
+        { header: 'Responses', key: 'responses', width: 15 },
+        { header: 'Response Rate', key: 'rate', width: 15 }
+        { header: 'Value', key: 'value', width: 15 }
+      ];
+      
+      // Add rows with mock data
+      const dates = generateDateRange(null, null, 10);
+        const interactions = Math.floor(Math.random() * 30) + 5;
+        const responses = Math.floor(Math.random() * interactions);
+        const rate = ((responses / interactions) * 100).toFixed(1);
+
+      for (const date of dates) {
+        worksheet.addRow({
+
+
+          interactions,
+          responses,
+          rate: `${rate}%`
+          value: Math.floor(Math.random() * 100)
+        });
+
     } else {
       // Generic report
       worksheet.columns = [
@@ -203,7 +249,7 @@ export const exportReport = async (req, res, next) => {
         { header: 'Metric', key: 'metric', width: 20 },
         { header: 'Value', key: 'value', width: 15 }
       ];
-      
+
       // Add rows with mock data
       const dates = generateDateRange(null, null, 10);
       for (const date of dates) {
@@ -214,6 +260,7 @@ export const exportReport = async (req, res, next) => {
         });
       }
     }
+    }
     
     // Set response headers
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
@@ -223,7 +270,7 @@ export const exportReport = async (req, res, next) => {
     await workbook.xlsx.write(res);
     res.end();
   } catch (error) {
-    console.error('Error exporting report:', error);
+
+    res.status(500).json({ message: 'Failed to export report' });
     next(new InternalServerError('Failed to export report'));
   }
-};
