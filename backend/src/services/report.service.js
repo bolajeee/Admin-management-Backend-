@@ -498,4 +498,3 @@ class ReportService {
 }
 
 export default ReportService;
-export default ReportService;

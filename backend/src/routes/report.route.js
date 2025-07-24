@@ -5,9 +5,6 @@ import {
   getClientActivity, 
   getFinanceRevenue, 
   getFinanceCategories,
-  saveReport,
-  getSavedReports,
-  deleteReport,
   exportReport
 } from '../controllers/report.controller.js';
 import { protectRoute, authorize } from '../middleware/auth.middleware.js';
@@ -33,17 +30,7 @@ router.get('/client-activity', getClientActivity);
 router.get('/finance/revenue', getFinanceRevenue);
 router.get('/finance/categories', getFinanceCategories);
 
-// Saved reports management
-router.post('/save', saveReport);
-router.get('/saved', getSavedReports);
-router.delete('/saved/:reportId', deleteReport);
-
 // Export reports
 router.get('/export', exportReport);
-
-// Activity-based reports
-router.get('/activity/engagement', getActivityEngagementReport);
-router.get('/activity/breakdown', getActionBreakdownReport);
-router.get('/activity/user/:userId', getUserActivityReport);
 
 export default router;
