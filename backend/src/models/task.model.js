@@ -60,58 +60,70 @@ const taskChecklistItemSchema = new mongoose.Schema({
 });
 
 const taskSchema = new mongoose.Schema({
-    // Task title
     title: {
         type: String,
         required: true,
         trim: true,
         maxlength: 200
     },
-    // Task description
     description: {
         type: String,
         trim: true
     },
-    // Status (todo, in_progress, completed, etc.)
     status: {
         type: String,
         enum: Object.values(taskStatus),
         default: taskStatus.TODO,
         index: true
     },
-    // Priority (low, medium, high, urgent)
     priority: {
         type: String,
         enum: Object.values(taskPriority),
         default: taskPriority.MEDIUM,
         index: true
     },
-    // Assigned users (array of User ObjectIds)
-    assignedTo: [{
+    assignees: [{
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User',
         index: true
     }],
-    // Creator
     createdBy: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User',
         required: true,
         index: true
     },
-    // Due date
     dueDate: {
         type: Date,
         index: true
     },
-    // Completion timestamp
+    startDate: {
+        type: Date,
+        index: true
+    },
     completedAt: {
         type: Date,
         index: true
     },
-    // Checklist items
+    completedBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User'
+    },
+    estimatedHours: {
+        type: Number,
+        min: 0
+    },
+    actualHours: {
+        type: Number,
+        min: 0,
+        default: 0
+    },
+    tags: [{
+        type: String,
+        trim: true,
+        lowercase: true
+    }],
     checklist: [taskChecklistItemSchema],
-    // File attachments
     attachments: [{
         url: String,
         name: String,
@@ -126,41 +138,23 @@ const taskSchema = new mongoose.Schema({
             default: Date.now
         }
     }],
-    // Activity log (comments, status changes, etc.)
-    activity: [taskActivitySchema],
-    // Recurrence info
-    recurrence: {
-        frequency: {
-            type: String, // e.g., 'daily', 'weekly', 'monthly', 'custom'
-            enum: ['none', 'daily', 'weekly', 'monthly', 'custom'],
-            default: 'none'
-        },
-        interval: {
-            type: Number, // e.g., every 2 days
-            default: 1
-        },
-        nextOccurrence: {
-            type: Date
-        },
-        endDate: {
-            type: Date
-        }
-    },
-    // Linked memos
-    memoLinks: [{
+    followers: [{
         type: mongoose.Schema.Types.ObjectId,
-        ref: 'Memo'
+        ref: 'User'
     }],
-    // Custom category
-    category: {
-        type: String,
-        trim: true,
-        default: ''
+    relatedTasks: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Task'
+    }],
+    activity: [taskActivitySchema],
+    metadata: {
+        type: mongoose.Schema.Types.Mixed,
+        default: {}
     }
 }, {
     timestamps: true,
     toJSON: {
-        transform: function (doc, ret) {
+        transform: function(doc, ret) {
             ret.id = ret._id;
             delete ret._id;
             delete ret.__v;
@@ -170,40 +164,40 @@ const taskSchema = new mongoose.Schema({
 });
 
 // Indexes for better query performance
-taskSchema.index({ assignedTo: 1, status: 1 });
+taskSchema.index({ assignees: 1, status: 1 });
 taskSchema.index({ createdBy: 1, status: 1 });
 taskSchema.index({ dueDate: 1, status: 1 });
 taskSchema.index({ status: 1, priority: -1, dueDate: 1 });
 taskSchema.index({ title: 'text', description: 'text' });
 
 // Pre-save hook to track task status changes
-taskSchema.pre('save', function (next) {
+taskSchema.pre('save', function(next) {
     if (this.isModified('status') && this.status === taskStatus.COMPLETED && !this.completedAt) {
         this.completedAt = new Date();
     } else if (this.isModified('status') && this.status !== taskStatus.COMPLETED) {
         this.completedAt = undefined;
-        // this.completedBy = undefined; // This line was removed as per the new_code
+        this.completedBy = undefined;
     }
     next();
 });
 
 // Static method to get tasks assigned to a user
-taskSchema.statics.findByAssignee = function (userId, options = {}) {
+taskSchema.statics.findByAssignee = function(userId, options = {}) {
     const { status, sortBy = 'dueDate', sortOrder = 'asc' } = options;
-
-    const query = { assignedTo: userId };
+    
+    const query = { assignees: userId };
     if (status) {
         query.status = status;
     }
-
+    
     return this.find(query)
         .sort({ [sortBy]: sortOrder === 'asc' ? 1 : -1 })
-        .populate('assignedTo', 'name email profilePicture')
+        .populate('assignees', 'name email profilePicture')
         .populate('createdBy', 'name email profilePicture');
 };
 
 // Method to add a comment to the task activity
-taskSchema.methods.addComment = async function (userId, comment) {
+taskSchema.methods.addComment = async function(userId, comment) {
     this.activity.push({
         user: userId,
         action: 'commented',
@@ -213,10 +207,10 @@ taskSchema.methods.addComment = async function (userId, comment) {
 };
 
 // Method to update task status with activity tracking
-taskSchema.methods.updateStatus = async function (userId, newStatus, comment = '') {
+taskSchema.methods.updateStatus = async function(userId, newStatus, comment = '') {
     const oldStatus = this.status;
     this.status = newStatus;
-
+    
     this.activity.push({
         user: userId,
         action: 'status_update',
@@ -226,17 +220,17 @@ taskSchema.methods.updateStatus = async function (userId, newStatus, comment = '
         },
         comment
     });
-
+    
     if (newStatus === taskStatus.COMPLETED) {
-        // this.completedBy = userId; // This line was removed as per the new_code
+        this.completedBy = userId;
         this.completedAt = new Date();
     }
-
+    
     return this.save();
 };
 
 // Method to calculate task progress based on checklist items
-taskSchema.methods.calculateProgress = function () {
+taskSchema.methods.calculateProgress = function() {
     if (!this.checklist || this.checklist.length === 0) {
         return this.status === taskStatus.COMPLETED ? 100 : 0;
     }
