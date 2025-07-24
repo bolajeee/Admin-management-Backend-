@@ -1,251 +1,645 @@
+import Memo, { memoStatus, memoSeverity } from '../models/memo.model.js';
 import User from '../models/user.model.js';
-import Task from '../models/task.model.js';
-import Message from '../models/message.model.js';
-import Memo from '../models/memo.model.js';
-import ExcelJS from 'exceljs';
+import { io } from '../index.js';
+import NotificationService from '../services/notification.service.js';
+import { NotFoundError, ForbiddenError, BadRequestError } from '../utils/errors.js';
 
 /**
- * Helper to generate dates within a range
+ * @desc    Create a new memo
+ * @route   POST /api/memos
+ * @access  Private
  */
-const generateDateRange = (startDate, endDate, count = 7) => {
-  const range = [];
-  const start = startDate ? new Date(startDate) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-  const end = endDate ? new Date(endDate) : new Date();
-  
-  // For specific number of points, calculate interval
-  const interval = Math.floor((end - start) / (count - 1));
-  
-  for (let i = 0; i < count; i++) {
-    const date = new Date(start.getTime() + interval * i);
-    range.push(date.toISOString().split('T')[0]);
-  }
-  
-  return range;
-};
+export const createMemo = async (req, res, next) => {
+    try {
+        const {
+            title,
+            content,
+            summary = '',
+            severity = memoSeverity.LOW,
+            recipients = [],
+            deadline,
+            expiresAt,
+            metadata = {}
+        } = req.body;
 
-/**
- * Get overview metrics for the dashboard
- */
-export const getMetrics = async (req, res) => {
-  try {
-    // In a real app, these would be calculated from your database
-    const metrics = {
-      productivity: 87.5,
-      productivityTrend: 12.3,
-      satisfaction: 92,
-      satisfactionTrend: 4.7,
-      revenue: 156800,
-      revenueTrend: 8.2,
-      costEfficiency: 78,
-      costEfficiencyTrend: -2.5
-    };
-    
-    res.status(200).json(metrics);
-  } catch (error) {
-    console.error('Error fetching metrics:', error);
-    res.status(500).json({ message: 'Failed to fetch metrics data' });
-  }
-};
+        // Validate recipients
+        if (recipients.length === 0 && req.user.role !== 'admin') {
+            throw new BadRequestError('At least one recipient is required');
+        }
 
-/**
- * Get team performance data
- */
-export const getTeamPerformance = async (req, res) => {
-  try {
-    // Get real user names from database for the demo
-    const users = await User.find({ role: 'employee' })
-      .select('name')
-      .limit(6);
-    
-    // Generate performance data based on real users
-    const performance = users.map(user => ({
-      name: user.name,
-      value: Math.floor(Math.random() * 50) + 10 // Random tasks completed (10-60)
-    }));
-    
-    res.status(200).json({ performance });
-  } catch (error) {
-    console.error('Error fetching team performance:', error);
-    res.status(500).json({ message: 'Failed to fetch team performance data' });
-  }
-};
+        // For non-admin users, ensure they can only send to themselves or their team
+        if (req.user.role !== 'admin') {
+            const validRecipients = await User.find({
+                _id: { $in: recipients },
+                $or: [
+                    { _id: req.user._id },
+                    { manager: req.user._id },
+                    { department: req.user.department }
+                ]
+            }).select('_id');
 
-/**
- * Get client activity data
- */
-export const getClientActivity = async (req, res) => {
-  try {
-    const { startDate, endDate } = req.query;
-    const dates = generateDateRange(startDate, endDate);
-    
-    // Generate activity data for the date range
-    const activity = dates.map(date => ({
-      date,
-      interactions: Math.floor(Math.random() * 30) + 5,
-      responses: Math.floor(Math.random() * 25) + 3
-    }));
-    
-    res.status(200).json({ activity });
-  } catch (error) {
-    console.error('Error fetching client activity:', error);
-    res.status(500).json({ message: 'Failed to fetch client activity data' });
-  }
-};
+            if (validRecipients.length !== recipients.length) {
+                throw new ForbiddenError('Not authorized to send memos to all specified recipients');
+            }
+        }
 
-/**
- * Get financial revenue data
- */
-export const getFinanceRevenue = async (req, res) => {
-  try {
-    const { startDate, endDate } = req.query;
-    const dates = generateDateRange(startDate, endDate);
-    
-    // Generate revenue data for the date range
-    const data = dates.map(date => ({
-      period: date,
-      value: Math.floor(Math.random() * 50000) + 10000
-    }));
-    
-    res.status(200).json({ data });
-  } catch (error) {
-    console.error('Error fetching finance revenue:', error);
-    res.status(500).json({ message: 'Failed to fetch financial revenue data' });
-  }
-};
-
-/**
- * Get financial categories data
- */
-export const getFinanceCategories = async (req, res) => {
-  try {
-    // Mock expense categories
-    const categories = [
-      'Salaries',
-      'Marketing',
-      'Software',
-      'Office Space',
-      'Travel',
-      'Equipment'
-    ];
-    
-    // Generate data for each category
-    const data = categories.map(category => ({
-      category,
-      value: Math.floor(Math.random() * 40000) + 5000
-    }));
-    
-    res.status(200).json({ data });
-  } catch (error) {
-    console.error('Error fetching finance categories:', error);
-    res.status(500).json({ message: 'Failed to fetch financial categories data' });
-  }
-};
-
-/**
- * Export report as Excel file
- */
-export const exportReport = async (req, res) => {
-  try {
-    const { type } = req.query;
-    
-    // Create a new Excel workbook
-    const workbook = new ExcelJS.Workbook();
-    const worksheet = workbook.addWorksheet(type.charAt(0).toUpperCase() + type.slice(1) + ' Report');
-    
-    // Add some data based on report type
-    if (type === 'team') {
-      // Get real user data
-      const users = await User.find({ role: 'employee' }).select('name email');
-      
-      // Set up headers
-      worksheet.columns = [
-        { header: 'Employee Name', key: 'name', width: 30 },
-        { header: 'Email', key: 'email', width: 30 },
-        { header: 'Tasks Completed', key: 'tasks', width: 20 },
-        { header: 'Performance Score', key: 'score', width: 20 }
-      ];
-      
-      // Add rows with mock data
-      for (const user of users) {
-        worksheet.addRow({
-          name: user.name,
-          email: user.email,
-          tasks: Math.floor(Math.random() * 50) + 10,
-          score: Math.floor(Math.random() * 100)
+        const memo = new Memo({
+            title,
+            content,
+            summary,
+            severity,
+            recipients,
+            createdBy: req.user._id,
+            deadline: deadline ? new Date(deadline) : null,
+            expiresAt: expiresAt ? new Date(expiresAt) : null,
+            metadata
         });
-      }
-    } else if (type === 'finance') {
-      // Set up headers
-      worksheet.columns = [
-        { header: 'Month', key: 'month', width: 15 },
-        { header: 'Revenue', key: 'revenue', width: 15 },
-        { header: 'Expenses', key: 'expenses', width: 15 },
-        { header: 'Profit', key: 'profit', width: 15 }
-      ];
-      
-      // Add rows with mock data
-      const months = ['January', 'February', 'March', 'April', 'May', 'June'];
-      for (const month of months) {
-        const revenue = Math.floor(Math.random() * 50000) + 20000;
-        const expenses = Math.floor(Math.random() * 30000) + 10000;
-        worksheet.addRow({
-          month,
-          revenue,
-          expenses,
-          profit: revenue - expenses
+
+        await memo.save();
+
+        // Populate the created memo with user data
+        const populatedMemo = await Memo.findById(memo._id)
+            .populate('createdBy', 'name email profilePicture')
+            .populate('recipients', 'name email socketId notificationPreferences');
+
+        // Send real-time notifications to online users
+        const onlineRecipients = populatedMemo.recipients.filter(
+            user => user.socketId
+        );
+
+        onlineRecipients.forEach(user => {
+            io.to(user.socketId).emit('new_memo', populatedMemo);
         });
-      }
-    } else if (type === 'clients') {
-      // Set up headers
-      worksheet.columns = [
-        { header: 'Date', key: 'date', width: 15 },
-        { header: 'Interactions', key: 'interactions', width: 15 },
-        { header: 'Responses', key: 'responses', width: 15 },
-        { header: 'Response Rate', key: 'rate', width: 15 }
-      ];
-      
-      // Add rows with mock data
-      const dates = generateDateRange(null, null, 10);
-      for (const date of dates) {
-        const interactions = Math.floor(Math.random() * 30) + 5;
-        const responses = Math.floor(Math.random() * interactions);
-        const rate = ((responses / interactions) * 100).toFixed(1);
-        
-        worksheet.addRow({
-          date,
-          interactions,
-          responses,
-          rate: `${rate}%`
+
+        // Send email/SMS notifications
+        await NotificationService.sendMemoNotification(
+            populatedMemo,
+            populatedMemo.recipients.map(r => r._id)
+        );
+
+        res.status(201).json({
+            success: true,
+            data: populatedMemo
         });
-      }
-    } else {
-      // Generic report
-      worksheet.columns = [
-        { header: 'Date', key: 'date', width: 15 },
-        { header: 'Metric', key: 'metric', width: 20 },
-        { header: 'Value', key: 'value', width: 15 }
-      ];
-      
-      // Add rows with mock data
-      const dates = generateDateRange(null, null, 10);
-      for (const date of dates) {
-        worksheet.addRow({
-          date,
-          metric: 'User Activity',
-          value: Math.floor(Math.random() * 100)
-        });
-      }
+    } catch (error) {
+        next(error);
     }
-    
-    // Set response headers
-    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    res.setHeader('Content-Disposition', `attachment; filename=${type}-report.xlsx`);
-    
-    // Write to response
-    await workbook.xlsx.write(res);
-    res.end();
-  } catch (error) {
-    console.error('Error exporting report:', error);
-    res.status(500).json({ message: 'Failed to export report' });
-  }
+};
+
+/**
+ * @desc    Get all memos (admin only)
+ * @route   GET /api/memos/all
+ * @access  Private/Admin
+ */
+export const getAllMemos = async (req, res, next) => {
+    try {
+        const {
+            status,
+            severity,
+            page = 1,
+            limit = 20,
+            sortBy = 'createdAt',
+            sortOrder = 'desc',
+            search
+        } = req.query;
+
+        const query = {};
+
+        if (status && Object.values(memoStatus).includes(status)) {
+            query.status = status;
+        }
+        if (severity && Object.values(memoSeverity).includes(severity)) {
+            query.severity = severity;
+        }
+        if (search) {
+            query.$or = [
+                { title: { $regex: search, $options: 'i' } },
+                { content: { $regex: search, $options: 'i' } }
+            ];
+        }
+
+        const [memos, total] = await Promise.all([
+            Memo.find(query)
+                .populate('createdBy', 'name email profilePicture')
+                .populate('recipients', 'name email')
+                .sort({ [sortBy]: sortOrder === 'desc' ? -1 : 1 })
+                .skip((page - 1) * limit)
+                .limit(parseInt(limit)),
+            Memo.countDocuments(query)
+        ]);
+
+        res.json({
+            success: true,
+            data: memos,
+            pagination: {
+                total,
+                page: parseInt(page),
+                limit: parseInt(limit),
+                totalPages: Math.ceil(total / limit)
+            }
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
+/**
+ * @desc    Create a memo for every user (admin only)
+ * @route   POST /api/memos/broadcast
+ * @access  Private/Admin
+ */
+export const createMemoForAllUsers = async (req, res, next) => {
+    try {
+        const { title, content, summary = '', severity = memoSeverity.LOW, deadline, expiresAt, metadata = {} } = req.body;
+
+        // Only admin can broadcast
+        if (req.user.role !== 'admin') {
+            return res.status(403).json({ message: 'Forbidden: Only admin can broadcast memos.' });
+        }
+
+        // Get all user IDs
+        const users = await User.find({}, '_id');
+        const recipientIds = users.map(u => u._id);
+
+        const memo = new Memo({
+            title,
+            content,
+            summary,
+            severity,
+            recipients: recipientIds,
+            createdBy: req.user._id,
+            deadline: deadline ? new Date(deadline) : null,
+            expiresAt: expiresAt ? new Date(expiresAt) : null,
+            metadata
+        });
+
+        await memo.save();
+
+        res.status(201).json({
+            success: true,
+            data: memo,
+            message: "Memo sent to all users"
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
+/**
+ * @desc    Get memos for a specific user (admin only)
+ * @route   GET /api/memos/user/:userId
+ * @access  Private/Admin
+ */
+export const getMemosForUser = async (req, res, next) => {
+    try {
+        const { userId } = req.params;
+        const {
+            status,
+            severity,
+            page = 1,
+            limit = 20,
+            sortBy = 'createdAt',
+            sortOrder = 'desc',
+            search
+        } = req.query;
+
+        const query = { recipients: userId };
+
+        if (status && Object.values(memoStatus).includes(status)) {
+            query.status = status;
+        }
+        if (severity && Object.values(memoSeverity).includes(severity)) {
+            query.severity = severity;
+        }
+        if (search) {
+            query.$or = [
+                { title: { $regex: search, $options: 'i' } },
+                { content: { $regex: search, $options: 'i' } }
+            ];
+        }
+
+        const [memos, total] = await Promise.all([
+            Memo.find(query)
+                .populate('createdBy', 'name email profilePicture')
+                .populate('recipients', 'name email')
+                .sort({ [sortBy]: sortOrder === 'desc' ? -1 : 1 })
+                .skip((page - 1) * limit)
+                .limit(parseInt(limit)),
+            Memo.countDocuments(query)
+        ]);
+
+        res.json({
+            success: true,
+            data: memos,
+            pagination: {
+                total,
+                page: parseInt(page),
+                limit: parseInt(limit),
+                totalPages: Math.ceil(total / limit)
+            }
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
+/**
+ * @desc    Get memos for the authenticated user
+ * @route   GET /api/memos
+ * @access  Private
+ */
+export const getUserMemos = async (req, res, next) => {
+    try {
+        const {
+            status = 'active',
+            severity,
+            page = 1,
+            limit = 20,
+            sortBy = 'createdAt',
+            sortOrder = 'desc',
+            search
+        } = req.query;
+
+        // Validate status
+        if (!Object.values(memoStatus).includes(status)) {
+            throw new BadRequestError('Invalid status value');
+        }
+
+        // Build query
+        const query = { recipients: req.user._id };
+
+        // Filter by status
+        if (status === 'active') {
+            query.$or = [
+                { expiresAt: { $gt: new Date() } },
+                { expiresAt: null }
+            ];
+            query.status = 'active';
+        } else if (status === 'expired') {
+            query.expiresAt = { $lte: new Date() };
+            query.status = 'active';
+        } else {
+            query.status = status;
+        }
+
+        // Filter by severity
+        if (severity && Object.values(memoSeverity).includes(severity)) {
+            query.severity = severity;
+        }
+
+        // Search by title or content
+        if (search) {
+            query.$or = [
+                ...(query.$or || []),
+                { title: { $regex: search, $options: 'i' } },
+                { content: { $regex: search, $options: 'i' } }
+            ];
+        }
+
+        // Execute query with pagination
+        const [memos, total] = await Promise.all([
+            Memo.find(query)
+                .populate('createdBy', 'name email profilePicture')
+                .populate('recipients', 'name email')
+                .sort({ [sortBy]: sortOrder === 'desc' ? -1 : 1 })
+                .skip((page - 1) * limit)
+                .limit(parseInt(limit)),
+            Memo.countDocuments(query)
+        ]);
+
+        res.json({
+            success: true,
+            data: memos,
+            pagination: {
+                total,
+                page: parseInt(page),
+                limit: parseInt(limit),
+                totalPages: Math.ceil(total / limit)
+            }
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
+/**
+ * @desc    Get a single memo by ID
+ * @route   GET /api/memos/:id
+ * @access  Private
+ */
+export const getMemoById = async (req, res, next) => {
+    try {
+        const memo = await Memo.findOne({
+            _id: req.params.memoId,
+            $or: [
+                { recipients: req.user._id },
+                { createdBy: req.user._id }
+            ]
+        })
+            .populate('createdBy', 'name email profilePicture')
+            .populate('recipients', 'name email')
+            .populate('acknowledgments.user', 'name email profilePicture');
+
+        if (!memo) {
+            throw new NotFoundError('Memo not found or access denied');
+        }
+
+        res.json({
+            success: true,
+            data: memo
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
+/**
+ * @desc    Mark a memo as read
+ * @route   PATCH /api/memos/:id/read
+ * @access  Private
+ */
+export const markMemoAsRead = async (req, res, next) => {
+    try {
+        const memo = await Memo.findOne({
+            _id: req.params.memoId,
+            recipients: req.user._id,
+            'readBy.user': { $ne: req.user._id }
+        });
+
+        if (!memo) {
+            throw new NotFoundError('Memo not found or already marked as read');
+        }
+
+        memo.readBy.push({
+            user: req.user._id,
+            readAt: new Date()
+        });
+
+        await memo.save();
+
+        // Emit real-time update
+        io.to(req.user.socketId).emit('memo_read', {
+            memoId: memo._id,
+            readBy: req.user._id
+        });
+
+        res.json({
+            success: true,
+            message: 'Memo marked as read'
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
+/**
+ * @desc    Acknowledge a memo
+ * @route   PATCH /api/memos/:id/acknowledge
+ * @access  Private
+ */
+export const acknowledgeMemo = async (req, res, next) => {
+    try {
+        const { comments = '' } = req.body;
+
+        const memo = await Memo.findOne({
+            _id: req.params.memoId,
+            recipients: req.user._id
+        });
+
+        if (!memo) {
+            throw new NotFoundError('Memo not found or access denied');
+        }
+
+        await memo.acknowledge(req.user._id, comments);
+
+        // Emit real-time update
+        io.to(memo.createdBy.socketId).emit('memo_acknowledged', {
+            memoId: memo._id,
+            acknowledgedBy: req.user._id,
+            acknowledgedAt: new Date()
+        });
+
+        res.json({
+            success: true,
+            message: 'Memo acknowledged successfully'
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
+/**
+ * @desc    Snooze a memo
+ * @route   PATCH /api/memos/:id/snooze
+ * @access  Private
+ */
+export const snoozeMemo = async (req, res, next) => {
+    try {
+        const { durationMinutes = 15, comments = '' } = req.body;
+
+        const memo = await Memo.findOne({
+            _id: req.params.memoId,
+            recipients: req.user._id
+        });
+
+        if (!memo) {
+            throw new NotFoundError('Memo not found or access denied');
+        }
+
+        await memo.snooze(req.user._id, durationMinutes, comments);
+
+        res.json({
+            success: true,
+            message: `Memo snoozed for ${durationMinutes} minutes`
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
+/**
+ * @desc    Update a memo
+ * @route   PUT /api/memos/:id
+ * @access  Private
+ */
+export const updateMemo = async (req, res, next) => {
+    try {
+        const { title, content, severity, recipients, deadline, expiresAt, status } = req.body;
+
+        const memo = await Memo.findOne({
+            _id: req.params.memoId,
+            createdBy: req.user._id
+        });
+
+        if (!memo) {
+            throw new NotFoundError('Memo not found or access denied');
+        }
+
+        // Allow status changes even if the memo is not currently `active`
+        if (status && Object.values(memoStatus).includes(status)) {
+            memo.status = status;
+        }
+
+        // Only allow other fields to be updated if the memo is `active`
+        if (memo.status === 'active') {
+            if (title) memo.title = title;
+            if (content) memo.content = content;
+            if (severity) memo.severity = severity;
+            if (deadline) memo.deadline = new Date(deadline);
+            if (expiresAt) memo.expiresAt = new Date(expiresAt);
+        }
+
+        // Handle recipients update
+        if (recipients && Array.isArray(recipients)) {
+            // For non-admin users, validate recipients
+            if (req.user.role !== 'admin') {
+                const validRecipients = await User.find({
+                    _id: { $in: recipients },
+                    $or: [
+                        { _id: req.user._id },
+                        { manager: req.user._id },
+                        { department: req.user.department }
+                    ]
+                }).select('_id');
+
+                if (validRecipients.length !== recipients.length) {
+                    throw new ForbiddenError('Not authorized to add all specified recipients');
+                }
+            }
+
+            memo.recipients = recipients;
+            // Reset read status for new recipients
+            memo.readBy = memo.readBy.filter(entry =>
+                recipients.some(r => r.toString() === entry.user.toString())
+            );
+        }
+
+        await memo.save();
+
+        // Emit real-time update
+        io.emit('memo_updated', memo);
+
+        res.json({
+            success: true,
+            data: await memo.populate(['createdBy', 'recipients'])
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
+/**
+ * @desc    Delete a memo
+ * @route   DELETE /api/memos/:id
+ * @access  Private
+ */
+export const deleteMemo = async (req, res, next) => {
+    try {
+        const memo = await Memo.findOne({
+            _id: req.params.memoId,
+            createdBy: req.user._id
+        });
+
+        if (!memo) {
+            throw new NotFoundError('Memo not found or access denied');
+        }
+
+        // Soft delete by updating status
+        memo.status = 'deleted';
+        await memo.save();
+
+        // Or hard delete if needed
+        // await Memo.findByIdAndDelete(req.params.id);
+
+        // Emit real-time update
+        io.emit('memo_deleted', { memoId: memo._id });
+
+        res.json({
+            success: true,
+            message: 'Memo deleted successfully'
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
+/**
+ * @desc    Get memo statistics
+ * @route   GET /api/memos/stats
+ * @access  Private
+ */
+export const getMemoStats = async (req, res, next) => {
+    try {
+        const stats = await Memo.aggregate([
+            {
+                $match: {
+                    $or: [
+                        { recipients: req.user._id },
+                        { createdBy: req.user._id }
+                    ]
+                }
+            },
+            {
+                $group: {
+                    _id: '$status',
+                    count: { $sum: 1 },
+                    bySeverity: {
+                        $push: {
+                            severity: '$severity',
+                            count: 1
+                        }
+                    }
+                }
+            },
+            {
+                $project: {
+                    _id: 0,
+                    status: '$_id',
+                    count: 1,
+                    bySeverity: {
+                        $reduce: {
+                            input: '$bySeverity',
+                            initialValue: {},
+                            in: {
+                                $mergeObjects: [
+                                    '$$value',
+                                    {
+                                        $let: {
+                                            vars: { sev: '$$this.severity' },
+                                            in: {
+                                                $arrayToObject: [[
+                                                    { k: '$$sev', v: { $sum: ['$$value.$$sev', 1] } }
+                                                ]]
+                                            }
+                                        }
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                }
+            }
+        ]);
+
+        res.json({
+            success: true,
+            data: stats
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
+/**
+ * @desc    Get memo count
+ * @route   GET /api/memos/count
+ * @access  Private
+ */
+export const getMemoCount = async (req, res) => {
+    try {
+        const count = await Memo.countDocuments();
+        res.json({ count });
+    } catch (error) {
+        res.status(500).json({ error: "Internal server error" });
+    }
 };

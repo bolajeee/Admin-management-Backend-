@@ -1,6 +1,16 @@
 import express from 'express';
-import { createTask, getTasks, updateTaskStatus, deleteTask, getTaskCount } from '../controllers/task.controller.js';
-import { protectRoute } from '../middleware/auth.middleware.js';
+import {
+    createTask,
+    deleteTask,
+    markTaskComplete,
+    getTasks,
+    getTaskCount,
+    assignTask,
+    updateTask,
+    debugTaskSchema,
+    getUserTasks,
+} from '../controllers/task.controller.js';
+import { protectRoute, authorize } from '../middleware/auth.middleware.js';
 
 const router = express.Router();
 
@@ -9,20 +19,28 @@ router.use(protectRoute);
 
 // Create a new task
 router.post('/', createTask);
+// Get task count for dashboard
+router.get('/count', getTaskCount);
 
-// Get all tasks (with optional filters)
-router.get('/', getTasks);
+// Get all tasks
+router.get('/tasks', getTasks);
 
-// Get tasks for a specific user
-router.get('/userTasks/:userId', getTasks);
+// Get tasks for current user
+router.get('/tasks/userTasks/:userId', getUserTasks);
 
-// Update task status
-router.patch('/:taskId/status', updateTaskStatus);
+// Update a task
+router.patch('/:taskId/status', updateTask);
 
-// Delete task
+// Delete a task
 router.delete('/:taskId', deleteTask);
 
-// Admin: Get task count
-router.get('/count', getTaskCount);
+// Mark a task as complete
+router.patch('/:taskId/complete', markTaskComplete);
+
+// Assign task to user
+router.patch('/:taskId/assign/:userId', assignTask);
+
+// Add at the end of your routes
+router.get('/debug', protectRoute, authorize(['admin']), debugTaskSchema);
 
 export default router;
