@@ -56,7 +56,6 @@ export const trackLoginFailure = (req, res, next) => {
     // Call the original status function
     return originalStatus.call(this, statusCode);
   };
-
   next();
 };
 
