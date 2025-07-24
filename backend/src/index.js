@@ -16,6 +16,8 @@ import Memo from './models/memo.model.js';
 import Task from './models/task.model.js';
 import dashboardRoutes from "./routes/dashboard.route.js";
 import adminRoutes from "./routes/admin.route.js"
+import reportScheduler from './services/scheduler.service.js';
+import { errorHandler } from './middleware/error.middleware.js';
 
 
 const app = express();
@@ -34,6 +36,7 @@ app.use("/api/tasks", taskRoute)
 app.use("/api/memos", memoRoute)
 app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/admin", adminRoutes)
+app.use('/api/reports', reportRoutes);
 
 const port = process.env.PORT || 5000;
 
@@ -293,7 +296,27 @@ io.on('connection', (socket) => {
 export {io}
 
 // Start the server
-httpServer.listen(port, () => {
-    console.log(`Server is running on port ${port}`);
-    connectDB();
+
+
+
+
+app.use(errorHandler);
+connectDB().then(() => {
+  // Initialize the report scheduler after DB connection
+  reportScheduler.initialize();
+
+  // Start the server
+  app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+  });
+});
+app.use(errorHandler);
+connectDB().then(() => {
+  // Initialize the report scheduler after DB connection
+  reportScheduler.initialize();
+
+  // Start the server
+  app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+  });
 });

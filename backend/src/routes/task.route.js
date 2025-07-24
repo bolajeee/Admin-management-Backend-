@@ -11,6 +11,7 @@ import {
     searchTasks
 } from '../controllers/task.controller.js';
 import { protectRoute } from '../middleware/auth.middleware.js';
+import { trackActivity } from '../middleware/activity.middleware.js';
 
 const router = express.Router();
 
@@ -18,8 +19,9 @@ const router = express.Router();
 router.use(protectRoute);
 
 // Create a new task
-router.post('/', createTask);
 
+
+router.post('/', trackActivity('create_task'), createTask);
 // Get all tasks (with optional filters)
 router.get('/', getTasks);
 
@@ -27,10 +29,12 @@ router.get('/', getTasks);
 router.get('/userTasks/:userId', getTasks);
 
 // Update task status
-router.patch('/:taskId/status', updateTaskStatus);
+
+router.patch('/:taskId/status', trackActivity('change_task_status'), updateTaskStatus);
 
 // Delete task
-router.delete('/:taskId', deleteTask);
+
+router.delete('/:taskId', trackActivity('delete_task'), deleteTask);
 
 // Admin: Get task count
 router.get('/count', getTaskCount);
@@ -67,3 +71,4 @@ router.patch('/:taskId/delegate', delegateTask);
 router.get('/search/advanced', searchTasks);
 
 export default router;
+
