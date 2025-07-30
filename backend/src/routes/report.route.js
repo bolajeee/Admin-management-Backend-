@@ -4,17 +4,25 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
+import { 
+  exportReport,
+  uploadReportData,
+  getUploadedReports,
+  getReportData
+} from '../controllers/report.controller.js';
+import { protectRoute, authorize } from '../middleware/auth.middleware.js';
 
+// Set up directory for uploads
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+const uploadsDir = path.join(__dirname, '../../uploads/reports');
 
 // Ensure upload directory exists
-const uploadsDir = path.join(__dirname, '../../uploads/reports');
 if (!fs.existsSync(uploadsDir)) {
-    fs.mkdirSync(uploadsDir, { recursive: true });
+  fs.mkdirSync(uploadsDir, { recursive: true });
 }
 
-// Configure multer
+// Configure multer storage
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
     cb(null, uploadsDir);
@@ -24,101 +32,68 @@ const storage = multer.diskStorage({
   }
 });
 
-// Updated file filter with better MIME type handling
-const fileFilter = function (req, file, cb) {
-  // Log the file info for debugging
-  console.log('Uploaded file:', {
-    fieldname: file.fieldname,
-    originalname: file.originalname,
-    mimetype: file.mimetype
-  });
-
-  // Check file extension
+// File filter for multer
+const fileFilter = (req, file, cb) => {
+  // Log file info for debugging
+  console.log('File upload attempt:', file);
+  
   const ext = path.extname(file.originalname).toLowerCase();
-  const validExtensions = ['.xlsx', '.xls', '.csv'];
+  const allowedExts = ['.xlsx', '.xls', '.csv'];
+  
+  if (!allowedExts.includes(ext)) {
+    return cb(new Error('Only Excel and CSV files are allowed'));
+  }
   
   // Check MIME type
   const validMimeTypes = [
     'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // .xlsx
     'application/vnd.ms-excel', // .xls
-    'text/csv', // .csv
+    'text/csv', 
     'application/csv',
-    'text/plain' // Sometimes CSV files are sent as text/plain
+    'text/plain', // Sometimes CSV files are sent as text/plain
+    'application/octet-stream' // Sometimes Excel files are sent this way
   ];
   
-  if (validExtensions.includes(ext) && validMimeTypes.includes(file.mimetype)) {
-    return cb(null, true);
+  if (!validMimeTypes.includes(file.mimetype)) {
+    console.log('Invalid mimetype:', file.mimetype);
+    return cb(new Error(`Invalid file type. Allowed types: Excel, CSV`));
   }
   
-  // Provide detailed error for debugging
-  console.error('File validation failed:', {
-    extension: ext,
-    mimetype: file.mimetype,
-    validExtensions,
-    validMimeTypes
-  });
-  
-  cb(new Error(`File type not allowed. Allowed extensions: ${validExtensions.join(', ')}`));
+  cb(null, true);
 };
 
-const upload = multer({
-  storage,
-  fileFilter,
+// Create multer upload handler with error handling
+const upload = multer({ 
+  storage, 
+  fileFilter, 
   limits: { fileSize: 10 * 1024 * 1024 } // 10MB
 });
 
-// Wrap the multer middleware to handle errors properly
-const uploadMiddleware = (req, res, next) => {
-  upload.single('reportFile')(req, res, function (err) {
-    if (err instanceof multer.MulterError) {
-      // A Multer error occurred when uploading
-      console.error('Multer error:', err);
-      return res.status(400).json({ message: `Upload error: ${err.message}` });
-    } else if (err) {
-      // An unknown error occurred when uploading
-      console.error('Upload error:', err);
+// Create an error-handling wrapper for multer
+const handleUpload = (req, res, next) => {
+  upload.single('reportFile')(req, res, (err) => {
+    if (err) {
+      console.error('File upload error:', err);
       return res.status(400).json({ message: err.message });
     }
-    
-    // Everything went fine
     next();
   });
 };
-
-// Other route imports and setup
-import { 
-  getMetrics, 
-  getTeamPerformance, 
-  getClientActivity, 
-  getFinanceRevenue, 
-  getFinanceCategories,
-  exportReport,
-  // Add these new controllers:
-  uploadReportData,
-  getUploadedReports,
-  getReportData
-} from '../controllers/report.controller.js';
-import { protectRoute, authorize } from '../middleware/auth.middleware.js';
 
 const router = express.Router();
 
 // All routes require authentication
 router.use(protectRoute);
 
-// Most report routes should be admin-only
+// Admin-only routes
 router.use(authorize(['admin']));
 
-// Existing endpoints
-router.get('/metrics', getMetrics);
-router.get('/team-performance', getTeamPerformance);
-router.get('/client-activity', getClientActivity);
-router.get('/finance/revenue', getFinanceRevenue);
-router.get('/finance/categories', getFinanceCategories);
-router.get('/export', exportReport);
-
-// Updated upload route with better error handling
-router.post('/upload', uploadMiddleware, uploadReportData);
+// File upload and management routes
+router.post('/upload', handleUpload, uploadReportData);
 router.get('/uploaded-reports', getUploadedReports);
 router.get('/uploaded-reports/:reportId', getReportData);
+router.get('/export', exportReport);
+
+
 
 export default router;
