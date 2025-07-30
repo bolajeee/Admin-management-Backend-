@@ -1,185 +1,113 @@
 import mongoose from 'mongoose';
 
-export const taskStatus = {
-    TODO: 'todo',
-    IN_PROGRESS: 'in_progress',
-    COMPLETED: 'completed',
-    BLOCKED: 'blocked',
-    CANCELLED: 'cancelled'
-};
-
-export const taskPriority = {
-    LOW: 'low',
-    MEDIUM: 'medium',
-    HIGH: 'high',
-    URGENT: 'urgent'
-};
-
-const taskActivitySchema = new mongoose.Schema({
-    user: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'User',
-        required: true
-    },
-    action: {
-        type: String,
-        required: true
-    },
-    changes: {
-        type: mongoose.Schema.Types.Mixed
-    },
-    comment: {
-        type: String,
-        trim: true
-    }
-}, {
-    timestamps: true,
-    _id: false
+// Comment sub-schema
+const commentSchema = new mongoose.Schema({
+  text: {
+    type: String,
+    required: true
+  },
+  user: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: true
+  },
+  createdAt: {
+    type: Date,
+    default: Date.now
+  }
 });
 
-const taskChecklistItemSchema = new mongoose.Schema({
-    text: {
+// Attachment sub-schema
+const attachmentSchema = new mongoose.Schema({
+  filename: String,
+  mimetype: String,
+  size: Number,
+  url: String,
+  uploadedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  },
+  uploadedAt: {
+    type: Date,
+    default: Date.now
+  }
+});
+
+// Recurrence sub-schema
+const recurrenceSchema = new mongoose.Schema({
+  frequency: {
         type: String,
-        required: true,
-        trim: true
+    enum: ['none', 'daily', 'weekly', 'monthly'],
+    default: 'none'
     },
-    completed: {
-        type: Boolean,
-        default: false
-    },
-    completedBy: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'User'
-    },
-    completedAt: {
-        type: Date
-    }
-}, {
-    _id: true,
-    timestamps: true
+  endDate: Date
 });
 
 const taskSchema = new mongoose.Schema({
-    title: {
+  title: {
         type: String,
-        required: true,
-        trim: true
+    required: true,
+    trim: true
     },
-    description: {
+  description: {
         type: String,
-        trim: true
+    trim: true
     },
-    status: {
+  status: {
         type: String,
-        enum: ['to do','blocked', 'in_progress', 'completed', 'cancelled'],
-        default: 'to do'
+    enum: ['todo', 'in_progress', 'blocked', 'completed', 'cancelled'],
+    default: 'todo'
     },
-    priority: {
+  priority: {
         type: String,
-        enum: ['low', 'medium', 'high', 'urgent'],
-        default: 'medium'
-    },
-    dueDate: {
-        type: Date
-    },
-    // Make sure this field exists with the exact same name
-    assignedTo: [{
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'User'
-    }],
-    createdBy: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'User',
-        required: true
-    },
-    completedAt: {
-        type: Date
-    },
-    // Add any additional fields that might be in your existing schema
-    category: {
-        type: String,
-        default: 'general'
-    }
-}, {
-    timestamps: true
-});
-
-
-// Indexes for better query performance
-taskSchema.index({ assignees: 1, status: 1 });
-taskSchema.index({ createdBy: 1, status: 1 });
-taskSchema.index({ dueDate: 1, status: 1 });
-taskSchema.index({ status: 1, priority: -1, dueDate: 1 });
-taskSchema.index({ title: 'text', description: 'text' });
-
-// Pre-save hook to track task status changes
-taskSchema.pre('save', function (next) {
-    if (this.isModified('status') && this.status === taskStatus.COMPLETED && !this.completedAt) {
-        this.completedAt = new Date();
-    } else if (this.isModified('status') && this.status !== taskStatus.COMPLETED) {
-        this.completedAt = undefined;
-        this.completedBy = undefined;
-    }
-    next();
-});
-
-// Static method to get tasks assigned to a user
-taskSchema.statics.findByAssignee = function (userId, options = {}) {
-    const { status, sortBy = 'dueDate', sortOrder = 'asc' } = options;
-
-    const query = { assignees: userId };
-    if (status) {
-        query.status = status;
-    }
-
-    return this.find(query)
-        .sort({ [sortBy]: sortOrder === 'asc' ? 1 : -1 })
-        .populate('assignees', 'name email profilePicture')
-        .populate('createdBy', 'name email profilePicture');
-};
-
-// Method to add a comment to the task activity
-taskSchema.methods.addComment = async function (userId, comment) {
-    this.activity.push({
-        user: userId,
-        action: 'commented',
-        comment
-    });
-    return this.save();
-};
-
-// Method to update task status with activity tracking
-taskSchema.methods.updateStatus = async function (userId, newStatus, comment = '') {
-    const oldStatus = this.status;
-    this.status = newStatus;
-
-    this.activity.push({
-        user: userId,
-        action: 'status_update',
-        changes: {
-            from: oldStatus,
-            to: newStatus
+    enum: ['low', 'medium', 'high', 'urgent'],
+    default: 'medium'
         },
-        comment
+  category: {
+    type: String,
+    default: 'general'
+  },
+  dueDate: {
+    type: Date
+  },
+  completedAt: {
+    type: Date
+  },
+  assignedTo: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  }],
+  createdBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: true
+  },
+  delegatedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  },
+  delegatedAt: {
+    type: Date
+  },
+  comments: [commentSchema],
+  attachments: [attachmentSchema],
+  linkedMemos: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Memo'
+  }],
+  recurrence: recurrenceSchema
+}, {
+  timestamps: true
     });
 
-    if (newStatus === taskStatus.COMPLETED) {
-        this.completedBy = userId;
-        this.completedAt = new Date();
-    }
-
-    return this.save();
-};
-
-// Method to calculate task progress based on checklist items
-taskSchema.methods.calculateProgress = function () {
-    if (!this.checklist || this.checklist.length === 0) {
-        return this.status === taskStatus.COMPLETED ? 100 : 0;
-    }
-    const completedItems = this.checklist.filter(item => item.completed).length;
-    return Math.round((completedItems / this.checklist.length) * 100);
-};
-
+// Indexes for improved query performance
+taskSchema.index({ status: 1 });
+taskSchema.index({ priority: 1 });
+taskSchema.index({ category: 1 });
+taskSchema.index({ assignedTo: 1 });
+taskSchema.index({ createdBy: 1 });
+taskSchema.index({ createdAt: 1 });
+taskSchema.index({ 'comments.user': 1 });
 const Task = mongoose.model('Task', taskSchema);
 
 export default Task;

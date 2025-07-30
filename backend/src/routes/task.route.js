@@ -9,10 +9,25 @@ import {
     updateTask,
     debugTaskSchema,
     getUserTasks,
+    addTaskComment,
+    getTaskComments,
+    uploadTaskAttachment,
+    listTaskAttachments,
+    deleteTaskAttachment,
+    linkMemoToTask,
+    unlinkMemoFromTask,
+    delegateTask,
+    searchTasks,
+    getTaskAuditLog
 } from '../controllers/task.controller.js';
 import { protectRoute, authorize } from '../middleware/auth.middleware.js';
+import multer from 'multer';
 
 const router = express.Router();
+
+// Configure multer for file uploads
+const storage = multer.memoryStorage();
+const upload = multer({ storage });
 
 // All routes require authentication
 router.use(protectRoute);
@@ -41,7 +56,32 @@ router.patch('/:taskId/complete', markTaskComplete);
 // Assign task to user
 router.patch('/:taskId/assign/:userId', assignTask);
 
-// Add at the end of your routes
+// General update endpoint (for status/priority/category)
+router.patch('/:taskId', updateTask);
+
+// Comments functionality
+router.post('/:taskId/comments', addTaskComment);
+router.get('/:taskId/comments', getTaskComments);
+
+// Attachments functionality
+router.post('/:taskId/attachments', upload.single('file'), uploadTaskAttachment);
+router.get('/:taskId/attachments', listTaskAttachments);
+router.delete('/:taskId/attachments/:attachmentId', deleteTaskAttachment);
+
+// Memo linking
+router.post('/:taskId/memos/:memoId', linkMemoToTask);
+router.delete('/:taskId/memos/:memoId', unlinkMemoFromTask);
+
+// Task delegation
+router.patch('/:taskId/delegate', delegateTask);
+
+// Advanced search
+router.get('/search/advanced', searchTasks);
+
+// Audit log
+router.get('/:taskId/audit', getTaskAuditLog);
+
+// Debug endpoint
 router.get('/debug', protectRoute, authorize(['admin']), debugTaskSchema);
 
 export default router;
