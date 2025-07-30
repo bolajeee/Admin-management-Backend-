@@ -48,21 +48,44 @@ export { io };
 // Middleware
 app.use(express.json());
 app.use(cookieParser());
+
+// Configure CORS with explicit allowed origins
+const allowedOrigins = [
+  'http://localhost:3000',  // Default React port
+  'http://localhost:5173',  // Default Vite port
+  'http://127.0.0.1:3000', // Alternative localhost
+  'http://127.0.0.1:5173', // Alternative Vite localhost
+];
+
+// Add FRONTEND_URL from environment if it exists
+if (process.env.FRONTEND_URL) {
+  allowedOrigins.push(process.env.FRONTEND_URL);
+}
+
+// console.log('Allowed CORS origins:', allowedOrigins);
+
 app.use(cors({
-  // More flexible CORS for Express
   origin: function(origin, callback) {
     // Allow requests with no origin (like mobile apps, curl requests)
-    if (!origin) return callback(null, true);
-    
-    // Allow localhost requests regardless of port
-    if (origin.startsWith('http://localhost:') || 
-        origin === process.env.FRONTEND_URL) {
+    if (!origin) {
+      console.log('No origin header present');
       return callback(null, true);
     }
     
+    // Check if the origin is allowed
+    if (allowedOrigins.includes(origin)) {
+      // console.log('Allowed origin:', origin);
+      return callback(null, true);
+    }
+    
+    // For debugging, log the blocked origin
+    console.log('Blocked by CORS:', origin);
     callback(new Error('Not allowed by CORS'));
   },
-  credentials: true
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  exposedHeaders: ['set-cookie']
 }));
 
 // Routes

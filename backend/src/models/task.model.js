@@ -71,8 +71,8 @@ const taskSchema = new mongoose.Schema({
     },
     status: {
         type: String,
-        enum: ['pending', 'in-progress', 'completed', 'cancelled'],
-        default: 'pending'
+        enum: ['to do','blocked', 'in_progress', 'completed', 'cancelled'],
+        default: 'to do'
     },
     priority: {
         type: String,
@@ -83,10 +83,10 @@ const taskSchema = new mongoose.Schema({
         type: Date
     },
     // Make sure this field exists with the exact same name
-    assignedTo: {
+    assignedTo: [{
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User'
-    },
+    }],
     createdBy: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User',

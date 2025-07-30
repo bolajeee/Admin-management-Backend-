@@ -19,14 +19,15 @@ router.use(protectRoute);
 
 // Create a new task
 router.post('/', createTask);
+
 // Get task count for dashboard
 router.get('/count', getTaskCount);
 
 // Get all tasks
-router.get('/tasks', getTasks);
+router.get('/getTasks', getTasks);
 
 // Get tasks for current user
-router.get('/tasks/userTasks/:userId', getUserTasks);
+router.get('/getUserTasks/:userId', getUserTasks);
 
 // Update a task
 router.patch('/:taskId/status', updateTask);
