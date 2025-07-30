@@ -16,6 +16,10 @@ import dashboardRoute from './routes/dashboard.route.js';
 import adminRoute from './routes/admin.route.js';
 import reportRoute from './routes/report.route.js';
 
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
 dotenv.config();
 
 const app = express();
@@ -147,6 +151,17 @@ io.on('connection', (socket) => {
     }
   });
 });
+
+// Get the directory name using ES modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Create uploads directory if it doesn't exist
+const uploadsDir = path.join(__dirname, '../uploads/reports');
+if (!fs.existsSync(uploadsDir)) {
+    fs.mkdirSync(uploadsDir, { recursive: true });
+    console.log('Created uploads directory at', uploadsDir);
+}
 
 // Connect to database and start server
 connectDB().then(() => {
