@@ -27,7 +27,7 @@ export const createTask = async (req, res) => {
         .filter(id => typeof id === 'string' && mongoose.Types.ObjectId.isValid(id));
     }
 
-    if (!req.user || !req.user.userId) {
+    if (!req.user || !req.user._id) {
       return res.status(401).json({ message: 'Authentication required' });
     }
 
@@ -37,7 +37,7 @@ export const createTask = async (req, res) => {
       dueDate: dueDate ? new Date(dueDate) : null,
       priority,
       assignedTo: assignedToArray,
-      createdBy: req.user.userId,
+      createdBy: req.user._id,
       status: status || 'to do',
       category,
       recurrence
