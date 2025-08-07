@@ -15,6 +15,7 @@ import taskRoute from './routes/task.route.js';
 import dashboardRoute from './routes/dashboard.route.js';
 import adminRoute from './routes/admin.route.js';
 import reportRoute from './routes/report.route.js';
+import settingsRoute from './routes/settings.route.js';
 
 import fs from 'fs';
 import path from 'path';
@@ -94,6 +95,7 @@ app.use(cors({
 
 // Routes
 app.use("/api/auth", authRoute);
+app.use("/api/users/settings", settingsRoute);
 app.use("/api/messages", messageRoute);
 app.use("/api/memos", memoRoute);
 app.use("/api/tasks", taskRoute);
