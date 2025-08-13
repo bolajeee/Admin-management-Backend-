@@ -303,6 +303,139 @@ class NotificationService {
         };
         return colors[priority] || '#6c757d';
     }
+
+    static async sendMessageNotification(message, sender, receiver) {
+        try {
+            if (!message || !sender || !receiver) return null;
+
+            const receiverUser = await User.findById(receiver._id)
+                .select('email phoneNumber notificationPreferences isActive');
+
+            if (!receiverUser || !receiverUser.isActive) return null;
+
+            const prefs = receiverUser.notificationPreferences || {};
+            const results = [];
+
+            // Send email notification if enabled
+            if (prefs.messages?.email && receiverUser.email) {
+                try {
+                    const result = await sendEmail(
+                        receiverUser.email,
+                        `New Message from ${sender.name}`,
+                        this._formatMessageEmail(message, sender)
+                    );
+                    results.push({
+                        userId: receiverUser._id,
+                        type: 'email',
+                        success: true,
+                        messageId: result.messageId
+                    });
+                } catch (error) {
+                    results.push({
+                        userId: receiverUser._id,
+                        type: 'email',
+                        success: false,
+                        error: error.message
+                    });
+                }
+            }
+
+            // Send SMS notification if enabled
+            if (prefs.messages?.sms && receiverUser.phoneNumber) {
+                try {
+                    const result = await sendSMS(
+                        receiverUser.phoneNumber,
+                        this._formatMessageSMS(message, sender)
+                    );
+                    results.push({
+                        userId: receiverUser._id,
+                        type: 'sms',
+                        success: result.success,
+                        sid: result.sid,
+                        error: result.error
+                    });
+                } catch (error) {
+                    results.push({
+                        userId: receiverUser._id,
+                        type: 'sms',
+                        success: false,
+                        error: error.message
+                    });
+                }
+            }
+
+            // Send real-time socket notification if user is online
+            if (receiverUser.socketId) {
+                io.to(receiverUser.socketId).emit('newMessage', {
+                    message,
+                    sender: {
+                        _id: sender._id,
+                        name: sender.name,
+                        profilePicture: sender.profilePicture
+                    }
+                });
+            }
+
+            return results;
+        } catch (error) {
+            console.error('Error in sendMessageNotification:', error);
+            throw error;
+        }
+    }
+
+    static _formatMessageEmail(message, sender) {
+        return `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                <div style="background-color: #f8f9fa; padding: 20px; border-radius: 10px;">
+                    <h2 style="color: #333; margin-bottom: 20px;">You have a new message</h2>
+                    <div style="display: flex; align-items: center; margin-bottom: 15px;">
+                        <img src="${sender.profilePicture || '/avatar.png'}" alt="Profile" 
+                            style="width: 50px; height: 50px; border-radius: 25px; margin-right: 15px;">
+                        <div>
+                            <h3 style="margin: 0; color: #2c3e50;">${sender.name}</h3>
+                            <p style="margin: 5px 0; color: #7f8c8d;">${sender.email || ''}</p>
+                        </div>
+                    </div>
+                    <div style="background-color: #ffffff; padding: 15px; border-radius: 5px; margin: 15px 0; 
+                        border-left: 4px solid #3498db;">
+                        ${message.content}
+                        ${message.image ? `
+                            <div style="margin-top: 10px;">
+                                <img src="${message.image}" alt="Attached Image" 
+                                    style="max-width: 100%; border-radius: 5px;">
+                            </div>
+                        ` : ''}
+                    </div>
+                    <p style="margin-top: 20px;">
+                        <a href="${process.env.FRONTEND_URL}/messages/${sender._id}" 
+                            style="background-color: #3498db; color: white; padding: 10px 20px; 
+                            text-decoration: none; border-radius: 5px;">
+                            Reply to Message
+                        </a>
+                    </p>
+                </div>
+                <p style="color: #95a5a6; font-size: 12px; margin-top: 20px;">
+                    This is an automated message. Please do not reply to this email.
+                </p>
+            </div>
+        `;
+    }
+
+    static _formatMessageSMS(message, sender) {
+        let smsContent = `New message from ${sender.name}:\n${message.content}`;
+        
+        // Truncate if too long
+        if (smsContent.length > 160) {
+            smsContent = smsContent.substring(0, 157) + '...';
+        }
+
+        // Add image indication if present
+        if (message.image) {
+            smsContent += '\n[Image attached]';
+        }
+
+        return smsContent;
+    }
 }
 
 export default NotificationService;

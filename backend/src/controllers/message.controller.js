@@ -6,6 +6,7 @@ import { MessageValidation } from '../utils/messageValidation.js';
 import { successResponse, errorResponse, validationError } from '../utils/responseHandler.js';
 import mongoose from 'mongoose';
 import { io } from '../index.js';
+import NotificationService from '../services/notification.service.js';
 
 export const getUsers = async (req, res) => {
     try {
@@ -159,15 +160,8 @@ export const sendMessage = async (req, res) => {
 
         const newMessage = await MessageService.createMessage(messageData);
 
-        // Emit real-time notification
-        io.to(receiverId.toString()).emit('newMessage', {
-            message: newMessage,
-            sender: {
-                _id: sender._id,
-                name: sender.name,
-                profilePicture: sender.profilePicture
-            }
-        });
+        // Send notifications (email, SMS, and real-time)
+        await NotificationService.sendMessageNotification(newMessage, sender, receiver);
 
         // Update last message timestamp for both users
         await Promise.all([
@@ -281,5 +275,36 @@ export const deleteMessage = async (req, res) => {
         return successResponse(res, null, 'Message deleted successfully');
     } catch (error) {
         return errorResponse(res, error, 'Error deleting message');
+    }
+};
+
+// New endpoint to update message notification preferences
+export const updateMessageNotificationPreferences = async (req, res) => {
+    try {
+        const userId = req.user._id;
+        const { email = false, sms = false } = req.body;
+
+        // Update user's notification preferences
+        const user = await User.findByIdAndUpdate(
+            userId,
+            { 
+                $set: { 
+                    'notificationPreferences.messages': { email, sms }
+                }
+            },
+            { new: true }
+        );
+
+        if (!user) {
+            return errorResponse(res, null, 'User not found', 404);
+        }
+
+        return successResponse(res, 
+            { preferences: user.notificationPreferences.messages },
+            'Notification preferences updated successfully'
+        );
+    } catch (error) {
+        console.error('Error updating notification preferences:', error);
+        return errorResponse(res, error, 'Error updating notification preferences');
     }
 };

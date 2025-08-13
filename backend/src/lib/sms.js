@@ -55,3 +55,23 @@ export const sendTaskAssignmentSMS = async (task, phoneNumber) => {
 
     return await sendSMS(phoneNumber, message);
 };
+
+export const sendNewMessageSMS = async (message, phoneNumber, senderName) => {
+    if (!phoneNumber) {
+        throw new Error('Phone number is required for SMS notification');
+    }
+
+    let smsContent = `New message from ${senderName}:\n${message.content}`;
+    
+    // Truncate if too long
+    if (smsContent.length > 160) {
+        smsContent = smsContent.substring(0, 157) + '...';
+    }
+
+    // Add image indication if present
+    if (message.image) {
+        smsContent += '\n[Image attached]';
+    }
+
+    return await sendSMS(phoneNumber, smsContent);
+};
