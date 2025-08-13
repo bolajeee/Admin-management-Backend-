@@ -643,3 +643,46 @@ export const getMemoCount = async (req, res) => {
         res.status(500).json({ error: "Internal server error" });
     }
 };
+
+/**
+ * Get number of memos read per day for the last 30 days
+ * @route GET /api/memos/analytics/read
+ * @access Private/Admin
+ */
+export const getMemosReadOverTime = async (req, res) => {
+    try {
+        const today = new Date();
+        const startDate = new Date();
+        startDate.setDate(today.getDate() - 29); // last 30 days including today
+        startDate.setHours(0, 0, 0, 0);
+
+        const data = await Memo.aggregate([
+            { $unwind: '$readBy' },
+            { $match: { 'readBy.readAt': { $gte: startDate } } },
+            {
+                $group: {
+                    _id: {
+                        $dateToString: { format: '%Y-%m-%d', date: '$readBy.readAt' }
+                    },
+                    count: { $sum: 1 }
+                }
+            },
+            { $sort: { _id: 1 } }
+        ]);
+
+        // Fill in days with zero if missing
+        const result = [];
+        for (let i = 0; i < 30; i++) {
+            const date = new Date(startDate);
+            date.setDate(startDate.getDate() + i);
+            const dateStr = date.toISOString().slice(0, 10);
+            const found = data.find(d => d._id === dateStr);
+            result.push({ date: dateStr, count: found ? found.count : 0 });
+        }
+
+        res.json({ success: true, data: result });
+    } catch (error) {
+        console.error('Error getting memos read over time:', error);
+        res.status(500).json({ message: 'Failed to get memos read analytics' });
+    }
+};

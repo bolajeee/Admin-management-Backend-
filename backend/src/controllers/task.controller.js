@@ -1,14 +1,29 @@
 import Task from '../models/task.model.js';
 import User from '../models/user.model.js';
 import Memo from '../models/memo.model.js';
-import { io } from '../index.js';
+import { successResponse, errorResponse, validationError } from '../utils/responseHandler.js';
+import { queryBuilder, populateFields } from '../utils/queryUtils.js';
+import ValidationUtils from '../utils/validationUtils.js';
+import NotificationService from '../services/notification.service.js';
 import mongoose from 'mongoose';
 
 /**
  * Create a new task
  */
+import { debugLog, handleServerError } from '../utils/debugUtils.js';
+
 export const createTask = async (req, res) => {
   try {
+    debugLog('Request body', req.body);
+    debugLog('User info', req.user);
+
+    // Validate request data
+    const validation = ValidationUtils.taskValidation(req.body);
+    if (!validation.isValid) {
+      debugLog('Validation failed', validation.errors);
+      return validationError(res, validation.errors);
+    }
+
     const {
       title,
       description,
@@ -25,14 +40,37 @@ export const createTask = async (req, res) => {
     if (assignedTo) {
       assignedToArray = Array.isArray(assignedTo) ? assignedTo : [assignedTo];
       assignedToArray = assignedToArray
-        .filter(id => typeof id === 'string' && mongoose.Types.ObjectId.isValid(id));
+        .filter(id => ValidationUtils.isValidObjectId(id));
     }
 
-    if (!req.user || !req.user._id) {
-      return res.status(401).json({ message: 'Authentication required' });
+    if (!req.user?._id) {
+      return errorResponse(res, null, 'Authentication required', 401);
     }
 
-    const task = new Task({
+    console.log('Creating task with data:', {
+      title,
+      description,
+      dueDate,
+      priority,
+      assignedTo: assignedToArray,
+      status,
+      category,
+      recurrence
+    });
+
+    // Check if we have a valid user ID
+    if (!req.user?._id) {
+      console.error('Invalid user ID:', req.user);
+      return errorResponse(res, null, 'Invalid user ID', 400);
+    }
+
+    // Validate task data
+    if (!title) {
+      console.error('Title is required');
+      return errorResponse(res, null, 'Title is required', 400);
+    }
+
+    const taskData = {
       title,
       description,
       dueDate: dueDate ? new Date(dueDate) : null,
@@ -42,44 +80,37 @@ export const createTask = async (req, res) => {
       status: status || 'todo',
       category,
       recurrence
-    });
+    };
+
+    console.log('Task data before creation:', taskData);
+    const task = new Task(taskData);
 
     const savedTask = await task.save();
 
-    // Optional: Notify assigned users if needed
     if (assignedToArray.length > 0) {
       const users = await User.find({ _id: { $in: assignedToArray } });
-      users.forEach(user => {
-        if (user?.socketId) {
-          io.to(user.socketId).emit('taskAssigned', {
-            task: savedTask,
-            message: `You have been assigned a new task: ${title}`
-          });
-        }
-      });
+      await NotificationService.notifyTaskAssignment(savedTask, users);
     }
 
-    // Return full populated task
-    const populatedTask = await Task.findById(savedTask._id)
-      .populate('assignedTo', 'name email profilePicture')
-      .populate('createdBy', 'name email');
+    const populatedTask = await populateFields(Task, savedTask, {
+      assignedTo: { model: User, select: 'name email profilePicture' },
+      createdBy: { model: User, select: 'name email' }
+    });
 
-    res.status(201).json(populatedTask);
+    return successResponse(res, populatedTask, 'Task created successfully', 201);
   } catch (error) {
-    console.error('Error creating task:', error);
+    debugLog('Error in createTask', error);
 
     if (error.name === 'ValidationError') {
       const messages = Object.values(error.errors).map(val => val.message);
+      debugLog('Validation error messages', messages);
       return res.status(400).json({
         message: 'Validation error',
         errors: messages
       });
     }
 
-    res.status(500).json({
-      message: 'Failed to create task',
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
-    });
+    return handleServerError(res, error, 'Failed to create task');
   }
 };
 
@@ -88,69 +119,47 @@ export const createTask = async (req, res) => {
  */
 export const getTasks = async (req, res) => {
   try {
-    // Extract query parameters for filtering
-    const { status, priority, assignee, category } = req.query;
+    console.log('[getTasks] Query parameters:', req.query);
+    const { status, priority, assignee, category, search, page, limit, sortBy } = req.query;
 
-    // Build query filter
-    const filter = {};
-    if (status) filter.status = status;
-    if (priority) filter.priority = priority;
-    if (assignee) filter.assignedTo = assignee;
-    if (category) filter.category = category;
+    const queryOptions = queryBuilder({}, {
+      filters: {
+        status,
+        priority,
+        assignedTo: assignee,
+        category
+      },
+      search,
+      searchFields: ['title', 'description'],
+      page: parseInt(page) || 1,
+      limit: parseInt(limit) || 10,
+      sort: sortBy ? { [sortBy]: -1 } : { createdAt: -1 }
+    });
 
-    // Try using a safe version of the query that won't fail if fields are missing
-    let tasks;
+    console.log('[getTasks] Query options:', queryOptions);
+
+    const tasks = await Task.find(queryOptions.query)
+      .sort(queryOptions.sort)
+      .skip(queryOptions.skip)
+      .limit(queryOptions.limit);
+
+    console.log(`[getTasks] Found ${tasks.length} tasks`);
+
     try {
-      tasks = await Task.find(filter)
-        .populate('assignedTo', 'name email profilePicture')
-        .populate('createdBy', 'name')
-        .sort({ createdAt: -1 });
+      const populatedTasks = await populateFields(Task, tasks, {
+        assignedTo: { model: User, select: 'name email profilePicture' },
+        createdBy: { model: User, select: 'name email' }
+      });
+
+      return successResponse(res, populatedTasks, 'Tasks retrieved successfully');
     } catch (populateError) {
-      console.error('Population error:', populateError);
-
-      // If the populate fails, try fetching without populate
-      tasks = await Task.find(filter).sort({ createdAt: -1 });
-
-      // Then manually fetch the users
-      const userIds = [...new Set(
-        tasks
-          .map(task => [
-            task.assignedTo ? task.assignedTo.toString() : null,
-            task.createdBy ? task.createdBy.toString() : null
-          ])
-          .flat()
-          .filter(Boolean)
-      )];
-
-      const users = await User.find({ _id: { $in: userIds } })
-        .select('_id name email profilePicture');
-
-      // Create a map for quick lookup
-      const userMap = {};
-      users.forEach(user => {
-        userMap[user._id.toString()] = user;
-      });
-
-      // Manually populate the fields
-      tasks = tasks.map(task => {
-        const taskObj = task.toObject();
-
-        if (taskObj.assignedTo && userMap[taskObj.assignedTo.toString()]) {
-          taskObj.assignedTo = userMap[taskObj.assignedTo.toString()];
-        }
-
-        if (taskObj.createdBy && userMap[taskObj.createdBy.toString()]) {
-          taskObj.createdBy = userMap[taskObj.createdBy.toString()];
-        }
-
-        return taskObj;
-      });
+      console.error('[getTasks] Error populating fields:', populateError);
+      // Return unpopulated tasks if population fails
+      return successResponse(res, tasks, 'Tasks retrieved (without user details)');
     }
-
-    res.status(200).json(tasks);
   } catch (error) {
-    console.error('Error fetching tasks:', error);
-    res.status(500).json({ message: 'Failed to fetch tasks' });
+    console.error('[getTasks] Error:', error);
+    return errorResponse(res, error, 'Failed to fetch tasks');
   }
 };
 
@@ -247,27 +256,31 @@ export const getTaskById = async (req, res) => {
  */
 export const updateTask = async (req, res) => {
   try {
-    const { title, description, dueDate, priority, status, assignedTo } = req.body;
+    // Validate request data
+    const validation = ValidationUtils.taskValidation(req.body);
+    if (!validation.isValid) {
+      return validationError(res, validation.errors);
+    }
 
+    const { title, description, dueDate, priority, status, assignedTo } = req.body;
     const task = await Task.findById(req.params.taskId);
 
     if (!task) {
-      return res.status(404).json({ message: 'Task not found' });
+      return errorResponse(res, null, 'Task not found', 404);
     }
 
-    // Check if user can update this task (admin or creator)
+    // Check permissions
     const isAdmin = req.user.role === 'admin';
     const isCreator = task.createdBy.toString() === req.user.userId;
     const isAssignee = task.assignedTo && task.assignedTo.toString() === req.user.userId;
 
     if (!isAdmin && !isCreator && !isAssignee) {
-      return res.status(403).json({ message: 'Not authorized to update this task' });
+      return errorResponse(res, null, 'Not authorized to update this task', 403);
     }
 
-    // Check if assignment has changed
     const assignmentChanged = assignedTo && (!task.assignedTo || task.assignedTo.toString() !== assignedTo);
+    const statusChanged = task.status !== status;
 
-    // Update the task
     const updatedTask = await Task.findByIdAndUpdate(
       req.params.taskId,
       {
@@ -280,32 +293,29 @@ export const updateTask = async (req, res) => {
         updatedAt: Date.now()
       },
       { new: true, runValidators: true }
-    ).populate('assignedTo', 'name email profilePicture')
-      .populate('createdBy', 'name email profilePicture');
+    );
 
-    // Notify the newly assigned user
+    const populatedTask = await populateFields(Task, updatedTask, {
+      assignedTo: { model: User, select: 'name email profilePicture' },
+      createdBy: { model: User, select: 'name email profilePicture' }
+    });
+
+    // Handle notifications
     if (assignmentChanged) {
       const user = await User.findById(assignedTo);
-      if (user && user.socketId) {
-        io.to(user.socketId).emit('taskAssigned', {
-          task: updatedTask,
-          message: `You have been assigned a task: ${title}`
-        });
+      if (user) {
+        await NotificationService.notifyTaskAssignment(populatedTask, user);
       }
     }
 
-    // Notify if the task status changed
-    if (task.status !== status && status === 'completed') {
+    if (statusChanged && status === 'completed') {
       const creator = await User.findById(task.createdBy);
-      if (creator && creator.socketId) {
-        io.to(creator.socketId).emit('taskCompleted', {
-          task: updatedTask,
-          message: `Task "${title}" has been completed`
-        });
+      if (creator) {
+        await NotificationService.notifyTaskUpdate(populatedTask, 'completion', [creator._id]);
       }
     }
 
-    res.status(200).json(updatedTask);
+    return successResponse(res, populatedTask, 'Task updated successfully');
   } catch (error) {
     console.error('Error updating task:', error);
     res.status(500).json({ message: 'Failed to update task' });
@@ -860,5 +870,52 @@ export const getTaskAuditLog = async (req, res) => {
   } catch (error) {
     console.error('Error fetching task audit log:', error);
     res.status(500).json({ message: 'Failed to fetch audit log' });
+  }
+};
+
+/**
+ * Get number of tasks completed per day for the last 30 days
+ * @route GET /api/tasks/analytics/completed
+ * @access Private/Admin
+ */
+export const getTasksCompletedOverTime = async (req, res) => {
+  try {
+    const today = new Date();
+    const startDate = new Date();
+    startDate.setDate(today.getDate() - 29); // last 30 days including today
+    startDate.setHours(0, 0, 0, 0);
+
+    const data = await Task.aggregate([
+      {
+        $match: {
+          status: 'completed',
+          completedAt: { $gte: startDate }
+        }
+      },
+      {
+        $group: {
+          _id: {
+            $dateToString: { format: '%Y-%m-%d', date: '$completedAt' }
+          },
+          count: { $sum: 1 }
+        }
+      },
+      { $sort: { _id: 1 } }
+    ]);
+
+    // Fill in days with zero if missing
+    const result = [];
+    for (let i = 0; i < 30; i++) {
+      const date = new Date(startDate);
+      date.setDate(startDate.getDate() + i);
+      const dateStr = date.toISOString().slice(0, 10);
+      const found = data.find(d => d._id === dateStr);
+      result.push({ date: dateStr, count: found ? found.count : 0 });
+    }
+
+    res.json({ success: true, data: result });
+  } catch (error) {
+    console.error('Error getting tasks completed over time:', error);
+    res.status(500).json({ message: 'Failed to get tasks completed analytics' });
   }
 };

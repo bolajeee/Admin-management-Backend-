@@ -1,9 +1,66 @@
+import { io } from '../index.js';
 import User from '../models/user.model.js';
 import { sendEmail } from '../lib/email.js';
 import { sendSMS } from '../lib/sms.js';
 import { memoStatus, memoSeverity } from '../models/memo.model.js';
 
 class NotificationService {
+    static async notifyTaskAssignment(task, users) {
+        if (!task) return;
+        
+        const usersArray = Array.isArray(users) ? users : [users];
+        const userIds = usersArray.map(user => user._id.toString());
+
+        try {
+            // Send email/SMS notifications
+            await this.sendTaskAssignmentNotification(task, userIds);
+            
+            // Send real-time socket notifications
+            for (const user of usersArray) {
+                if (user?.socketId) {
+                    io.to(user.socketId).emit('taskAssigned', {
+                        task,
+                        message: `You have been assigned to task: ${task.title}`
+                    });
+                }
+            }
+        } catch (error) {
+            console.error('Error in notifyTaskAssignment:', error);
+        }
+    }
+
+    static async notifyTaskUpdate(task, updateType, userIds) {
+        if (!task || !userIds?.length) return;
+
+        try {
+            const users = await User.find({ _id: { $in: userIds } });
+            
+            let message;
+            switch (updateType) {
+                case 'completion':
+                    message = `Task "${task.title}" has been marked as complete`;
+                    break;
+                case 'status':
+                    message = `Task "${task.title}" status has been updated to ${task.status}`;
+                    break;
+                default:
+                    message = `Task "${task.title}" has been updated`;
+            }
+
+            for (const user of users) {
+                if (user?.socketId) {
+                    io.to(user.socketId).emit('taskUpdated', {
+                        task,
+                        updateType,
+                        message
+                    });
+                }
+            }
+        } catch (error) {
+            console.error('Error in notifyTaskUpdate:', error);
+        }
+    }
+
     static async sendMemoNotification(memo, userIds = []) {
         try {
             if (!memo || !userIds.length) return [];

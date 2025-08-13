@@ -3,34 +3,84 @@ import User from "../models/user.model.js";
 
 export const protectRoute = async (req, res, next) => {
     try {
+        // Log request details for debugging
+        console.log('Auth middleware - Request:', {
+            path: req.path,
+            method: req.method,
+            cookies: req.cookies,
+            headers: {
+                authorization: req.headers.authorization ? 'Bearer [redacted]' : undefined
+            }
+        });
+
         let token = null;
 
         // Check for token in cookies
         if (req.cookies && req.cookies.token) {
             token = req.cookies.token;
+            console.log('Found token in cookies');
         }
-
         // Optionally, check for token in Authorization header
         else if (req.headers.authorization && req.headers.authorization.startsWith("Bearer ")) {
             token = req.headers.authorization.split(" ")[1];
+            console.log('Found token in Authorization header');
         }
 
         if (!token) {
-            return res.status(401).json({ message: "Not authorized, no token" });
+            console.log('No token found in request');
+            return res.status(401).json({ 
+                message: "Authentication required", 
+                code: "NO_TOKEN"
+            });
         }
 
         // Verify token
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        console.log('Token verified successfully');
+
         const user = await User.findById(decoded.userId || decoded.id).select("-password");
         if (!user) {
-            return res.status(401).json({ message: "Not authorized, user not found" });
+            console.log('User not found for token:', decoded);
+            return res.status(401).json({ 
+                message: "User not found", 
+                code: "USER_NOT_FOUND"
+            });
         }
+
+        // Log successful authentication
+        console.log('User authenticated successfully:', {
+            userId: user._id,
+            role: user.role
+        });
 
         req.user = user;
         next();
     } catch (error) {
-        console.error('Authentication error:', error);
-        return res.status(401).json({ message: "Not authorized, token failed" });
+        // Detailed error logging
+        console.error('Authentication error:', {
+            name: error.name,
+            message: error.message,
+            stack: error.stack
+        });
+
+        // Send appropriate error response based on error type
+        if (error.name === 'JsonWebTokenError') {
+            return res.status(401).json({ 
+                message: "Invalid token", 
+                code: "INVALID_TOKEN"
+            });
+        } else if (error.name === 'TokenExpiredError') {
+            return res.status(401).json({ 
+                message: "Token expired", 
+                code: "TOKEN_EXPIRED"
+            });
+        }
+
+        return res.status(401).json({ 
+            message: "Authentication failed", 
+            code: "AUTH_FAILED",
+            error: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
     }
 };
 

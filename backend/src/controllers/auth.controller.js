@@ -1,102 +1,71 @@
-import { generateToken } from '../lib/utils/utils.js'
-import User from '../models/user.model.js'
-import bcrypt from "bcryptjs"
-import cloudinary from "../lib/cloudinary.js"
-
-
+import { generateToken } from '../lib/utils/utils.js';
+import User from '../models/user.model.js';
+import Message from '../models/message.model.js';
+import cloudinary from "../lib/cloudinary.js";
+import AuthService from '../services/auth.service.js';
+import { AuthValidation } from '../utils/authValidation.js';
+import { successResponse, errorResponse, validationError } from '../utils/responseHandler.js';
 
 
 export const signupUser = async (req, res) => {
-    const { name, email, password } = req.body
-
-    //validate the data
-    if (!name || !email || !password) {
-        return res.status(400).json({ message: "Please fill all the fields" })
-    }
-
-    //check if the user already exists
-    const userExists = await User.findOne({ email })
-    if (userExists) {
-        return res.status(400).json({ message: "User already exists" })
-    }
-
     try {
-        //check if the password is strong enough
-        // const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&#])[A-Za-z\d@$!%*?&#]{8,}$/;
+        const validation = AuthValidation.validateSignup(req.body);
+        if (!validation.isValid) {
+            return validationError(res, validation.errors);
+        }
 
-        // if (!passwordRegex.test(password)) {
-        //     return res.status(400).json({ message: "Password must be at least 8 characters long and contain at least one uppercase letter, one lowercase letter, one number and one special character" })
-        // }
+        const { name, email, password } = req.body;
 
-        //hash the password
-        const salt = await bcrypt.genSalt(10)
-        const hashedPassword = await bcrypt.hash(password, salt)
+        const userExists = await User.findOne({ email });
+        if (userExists) {
+            return errorResponse(res, null, 'User already exists', 400);
+        }
 
-        //create a new user
-        const user = new User({
+        const hashedPassword = await AuthService.hashPassword(password);
+        const userData = {
             name,
             email,
             password: hashedPassword,
-        })
+            role: 'employee' // Default role
+        };
 
-        //save the user to the database
-        if (user) {
-            //generate a token
-            generateToken(user._id, res)
-            await user.save()
-            res.status(201).json({
-                message: "User created successfully",
-                _id: user._id,
-                name: user.name,
-                email: user.email,
-                profilePicture: user.profilePicture,
-            })
-        } else {
-            res.status(400).json({ message: "Invalid user data" })
-        }
+        const user = await AuthService.createUserWithRole(userData);
+        generateToken(user._id, res);
+
+        return successResponse(
+            res,
+            AuthService.generateAuthResponse(user),
+            'User created successfully',
+            201
+        );
     } catch (error) {
-        console.error(error, "Error in signup User Controller")
-        res.status(500).json({ message: "Internal server error" })
+        return errorResponse(res, error, 'Error creating user');
     }
 }
 
 export const loginUser = async (req, res) => {
-    const { email, password } = req.body || req.body.body
-
-    console.log("Login data", req.body)
-    //validate the data
-    if (!email || !password) {
-        return res.status(400).json({ message: "Please fill all the fields" })
-    }
-
-
-    //check if the user exists
     try {
-        const user = await User.findOne({ email })
+        const validation = AuthValidation.validateLogin(req.body);
+        if (!validation.isValid) {
+            return validationError(res, validation.errors);
+        }
+
+        const { email, password } = req.body;
+        const user = await User.findOne({ email });
 
         if (!user) {
-            return res.status(400).json({
-                message: "Invalid email or password"
-            })
+            return errorResponse(res, null, 'Invalid email or password', 400);
         }
 
-        //check if the password is correct
-        const isPasswordCorrect = await bcrypt.compare(password, user.password)
+        const isPasswordCorrect = await AuthService.comparePasswords(password, user.password);
         if (!isPasswordCorrect) {
-            return res.status(400).json({ message: "Invalid email or password" })
+            return errorResponse(res, null, 'Invalid email or password', 400);
         }
 
-        //check the need to gen token again?
-        generateToken(user._id, res)
-
-        res.status(200).json({
-            _id: user._id,
-            email: user.email,
-            profilepic: user.profilePicture
-        })
+        generateToken(user._id, res);
+        return successResponse(res, AuthService.generateAuthResponse(user), 'Login successful');
     } catch (error) {
-        console.error("Error in login controller", error.message)
-        console.log()
+        return errorResponse(res, error, 'Error during login');
     }
 }
 
@@ -150,15 +119,15 @@ export const updateProfile = async (req, res) => {
 };
 
 export const checkAuthStatus = async (req, res) => {
-  try {
-    if (!req.user) {
-      return res.status(401).json({ message: "Unauthorized. Please login." });
+    try {
+        if (!req.user) {
+            return res.status(401).json({ message: "Unauthorized. Please login." });
+        }
+        res.status(200).json(req.user);
+    } catch (error) {
+        console.error(`Error in checkAuthStatus: ${error.message}`);
+        res.status(500).json({ message: "Internal server error" });
     }
-    res.status(200).json(req.user);
-  } catch (error) {
-    console.error(`Error in checkAuthStatus: ${error.message}`);
-    res.status(500).json({ message: "Internal server error" });
-  }
 };
 
 export const deleteUser = async (req, res) => {
@@ -176,31 +145,89 @@ export const deleteUser = async (req, res) => {
 };
 
 export const createUser = async (req, res) => {
-  const { name, email, role, password } = req.body;
-  
-  try {
-    // Validation and checks
-    if (!name || !email || !role) {
-      return res.status(400).json({ message: 'All fields are required' });
+    try {
+        const validation = AuthValidation.validateCreateUser(req.body);
+        if (!validation.isValid) {
+            return validationError(res, validation.errors);
+        }
+
+        const { name, email, role, password } = req.body;
+        const userExists = await User.findOne({ email });
+        if (userExists) {
+            return errorResponse(res, null, 'User with this email already exists', 400);
+        }
+
+        const user = await AuthService.createUserWithRole({ name, email, role, password });
+        return successResponse(
+            res, 
+            AuthService.generateAuthResponse(user),
+            'User created successfully',
+            201
+        );
+    } catch (error) {
+        return errorResponse(res, error, 'Failed to create user');
     }
+};
 
-     //hash the password
-        const salt = await bcrypt.genSalt(10)
-        const hashedPassword = await bcrypt.hash("default", salt)
+// Toggle user active status (admin)
+export const toggleUserActive = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const user = await User.findById(id);
+        if (!user) return res.status(404).json({ message: 'User not found' });
+        user.isActive = !user.isActive;
+        await user.save();
+        res.status(200).json({ message: `User ${user.isActive ? 'activated' : 'deactivated'} successfully`, isActive: user.isActive });
+    } catch (error) {
+        res.status(500).json({ message: 'Failed to update user status' });
+    }
+};
 
-    // Create new employee user
-    const newUser = new User({
-      name,
-      email,
-      role, // Role could be 'employee', 'admin', etc.
-      password: hashedPassword, // Don't forget to hash the password
-    });
+// Reset user password to default (admin)
+export const resetUserPassword = async (req, res) => {
+    try {
+        const { id } = req.params;
+        if (!ValidationUtils.isValidObjectId(id)) {
+            return errorResponse(res, null, 'Invalid user ID', 400);
+        }
 
-    await newUser.save();
+        const updatedUser = await AuthService.resetUserPassword(id);
+        if (!updatedUser) {
+            return errorResponse(res, null, 'User not found', 404);
+        }
 
-    return res.status(201).json({ message: 'Employee added successfully', user: newUser });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: 'Failed to add employee' });
-  }
+        return successResponse(res, null, 'Password reset to default');
+    } catch (error) {
+        return errorResponse(res, error, 'Failed to reset password');
+    }
+};
+
+// Get user stats (messages, joined, last message)
+export const getUserStats = async (req, res) => {
+    try {
+        const { id } = req.params;
+        if (!ValidationUtils.isValidObjectId(id)) {
+            return errorResponse(res, null, 'Invalid user ID', 400);
+        }
+
+        const [user, totalMessages, lastMsg] = await Promise.all([
+            User.findById(id),
+            Message.countDocuments({ sender: id }),
+            Message.findOne({ sender: id }).sort({ createdAt: -1 }).select('content')
+        ]);
+
+        if (!user) {
+            return errorResponse(res, null, 'User not found', 404);
+        }
+
+        const stats = {
+            totalMessages,
+            joined: user.createdAt,
+            lastMessage: lastMsg?.content || ''
+        };
+
+        return successResponse(res, stats);
+    } catch (error) {
+        return errorResponse(res, error, 'Failed to get user stats');
+    }
 };

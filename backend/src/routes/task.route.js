@@ -18,7 +18,8 @@ import {
     unlinkMemoFromTask,
     delegateTask,
     searchTasks,
-    getTaskAuditLog
+    getTaskAuditLog,
+    getTasksCompletedOverTime
 } from '../controllers/task.controller.js';
 import { protectRoute, authorize } from '../middleware/auth.middleware.js';
 import multer from 'multer';
@@ -39,16 +40,19 @@ router.post('/', createTask);
 router.get('/count', getTaskCount);
 
 // Get all tasks
-router.get('/getTasks', getTasks);
+router.get('/', getTasks);
 
 // Get tasks for current user
 router.get('/getUserTasks/:userId', getUserTasks);
 
-// Update a task
+// Update a task status
 router.patch('/:taskId/status', updateTask);
 
+// Update a task
+router.patch('/:taskId', protectRoute, updateTask);
+
 // Delete a task
-router.delete('/:taskId', deleteTask);
+router.delete('/:taskId', protectRoute, deleteTask);
 
 // Mark a task as complete
 router.patch('/:taskId/complete', markTaskComplete);
@@ -80,6 +84,9 @@ router.get('/search/advanced', searchTasks);
 
 // Audit log
 router.get('/:taskId/audit', getTaskAuditLog);
+
+// Analytics: tasks completed over time (admin only)
+router.get('/analytics/completed', authorize(['admin']), getTasksCompletedOverTime);
 
 // Debug endpoint
 router.get('/debug', protectRoute, authorize(['admin']), debugTaskSchema);

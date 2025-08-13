@@ -1,23 +1,21 @@
-import User from "../models/user.model.js";
-import Memo from "../models/memo.model.js";
-import Task from "../models/task.model.js";
-import Message from "../models/message.model.js";
+import { DashboardService } from '../services/dashboard.service.js';
+import { successResponse, errorResponse } from '../utils/responseHandler.js';
 
 export const getDashboardStats = async (req, res) => {
     try {
-        const [employeeCount, memoCount, taskCount, messageCount] = await Promise.all([
-            User.countDocuments({ role: "employee" }),
-            Memo.countDocuments(),
-            Task.countDocuments(),
-            Message.countDocuments()
-        ]);
-        res.status(200).json({
-            employees: employeeCount,
-            memos: memoCount,
-            tasks: taskCount,
-            messages: messageCount
-        });
+        const stats = await DashboardService.getDashboardStats();
+        return successResponse(res, stats, 'Dashboard statistics retrieved successfully');
     } catch (error) {
-        res.status(500).json({ message: "Failed to fetch dashboard stats" });
+        return errorResponse(res, error, 'Failed to fetch dashboard statistics');
+    }
+};
+
+export const getRecentActivity = async (req, res) => {
+    try {
+        const { limit = 20 } = req.query;
+        const activities = await DashboardService.getRecentActivity(Number(limit));
+        return successResponse(res, activities, 'Recent activities retrieved successfully');
+    } catch (error) {
+        return errorResponse(res, error, 'Failed to fetch recent activities');
     }
 };
