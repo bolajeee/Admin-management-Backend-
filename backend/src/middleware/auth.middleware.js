@@ -1,5 +1,8 @@
 import jwt from "jsonwebtoken";
 import User from "../models/user.model.js";
+import Task from '../models/task.model.js';
+import Memo from '../models/memo.model.js';
+import Conversation from '../models/conversation.model.js';
 
 export const protectRoute = async (req, res, next) => {
     try {
@@ -131,10 +134,19 @@ export const authorize = (roles = []) => {
 };
 
 // Middleware to check if the user is the owner of the resource
+const modelMap = {
+    task: Task,
+    memo: Memo,
+};
+
 export const isOwner = (modelName, idParam = 'id') => {
     return async (req, res, next) => {
         try {
-            const Model = require(`../models/${modelName}.model.js`);
+            const Model = modelMap[modelName];
+            if (!Model) {
+                return res.status(400).json({ message: 'Invalid resource type' });
+            }
+
             const document = await Model.findById(req.params[idParam]);
 
             if (!document) {
@@ -146,7 +158,7 @@ export const isOwner = (modelName, idParam = 'id') => {
             }
 
             // Check if the authenticated user is the owner
-            if (document.createdBy.toString() !== req.userId.toString()) {
+            if (document.createdBy.toString() !== req.user._id.toString()) {
                 return res.status(403).json({
                     success: false,
                     message: 'Not authorized to access this resource',
@@ -177,7 +189,7 @@ export const isParticipant = (conversationIdParam = 'conversationId') => {
             // Check if user is a participant in the conversation
             const isParticipant = await Conversation.exists({
                 _id: conversationId,
-                participants: req.userId
+                participants: req.user._id
             });
 
             if (!isParticipant) {

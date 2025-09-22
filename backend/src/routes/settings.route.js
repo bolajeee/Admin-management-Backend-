@@ -1,6 +1,7 @@
 import express from "express";
 import { getUserSettings, updateUserSettings } from "../controllers/settings.controller.js";
 import { protectRoute } from "../middleware/auth.middleware.js";
+import { sanitizeInput } from "../middleware/sanitization.middleware.js";
 
 const router = express.Router();
 
@@ -11,6 +12,6 @@ router.use(protectRoute);
 router.get("/", getUserSettings);
 
 // Update user settings
-router.put("/", updateUserSettings);
+router.put("/", sanitizeInput, updateUserSettings);
 
 export default router;

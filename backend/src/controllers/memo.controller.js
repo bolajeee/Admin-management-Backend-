@@ -2,6 +2,8 @@ import Memo, { memoStatus, memoSeverity } from '../models/memo.model.js';
 import User from '../models/user.model.js';
 import { io } from '../index.js';
 import NotificationService from '../services/notification.service.js';
+import { MemoService } from '../services/memo.service.js';
+import { successResponse, errorResponse } from '../utils/responseHandler.js';
 import { NotFoundError, ForbiddenError, BadRequestError } from '../utils/errors.js';
 
 /**
@@ -77,10 +79,7 @@ export const createMemo = async (req, res, next) => {
             populatedMemo.recipients.map(r => r._id)
         );
 
-        res.status(201).json({
-            success: true,
-            data: populatedMemo
-        });
+        successResponse(res, populatedMemo, 'Memo created successfully', 201);
     } catch (error) {
         next(error);
     }
@@ -93,51 +92,8 @@ export const createMemo = async (req, res, next) => {
  */
 export const getAllMemos = async (req, res, next) => {
     try {
-        const {
-            status,
-            severity,
-            page = 1,
-            limit = 20,
-            sortBy = 'createdAt',
-            sortOrder = 'desc',
-            search
-        } = req.query;
-
-        const query = {};
-
-        if (status && Object.values(memoStatus).includes(status)) {
-            query.status = status;
-        }
-        if (severity && Object.values(memoSeverity).includes(severity)) {
-            query.severity = severity;
-        }
-        if (search) {
-            query.$or = [
-                { title: { $regex: search, $options: 'i' } },
-                { content: { $regex: search, $options: 'i' } }
-            ];
-        }
-
-        const [memos, total] = await Promise.all([
-            Memo.find(query)
-                .populate('createdBy', 'name email profilePicture')
-                .populate('recipients', 'name email')
-                .sort({ [sortBy]: sortOrder === 'desc' ? -1 : 1 })
-                .skip((page - 1) * limit)
-                .limit(parseInt(limit)),
-            Memo.countDocuments(query)
-        ]);
-
-        res.json({
-            success: true,
-            data: memos,
-            pagination: {
-                total,
-                page: parseInt(page),
-                limit: parseInt(limit),
-                totalPages: Math.ceil(total / limit)
-            }
-        });
+        const { memos, pagination } = await MemoService.getMemos(req.query, req.user);
+        successResponse(res, memos, 'Memos retrieved successfully', 200, pagination);
     } catch (error) {
         next(error);
     }
@@ -175,11 +131,7 @@ export const createMemoForAllUsers = async (req, res, next) => {
 
         await memo.save();
 
-        res.status(201).json({
-            success: true,
-            data: memo,
-            message: "Memo sent to all users"
-        });
+        successResponse(res, memo, 'Memo sent to all users', 201);
     } catch (error) {
         next(error);
     }
@@ -193,51 +145,8 @@ export const createMemoForAllUsers = async (req, res, next) => {
 export const getMemosForUser = async (req, res, next) => {
     try {
         const { userId } = req.params;
-        const {
-            status,
-            severity,
-            page = 1,
-            limit = 20,
-            sortBy = 'createdAt',
-            sortOrder = 'desc',
-            search
-        } = req.query;
-
-        const query = { recipients: userId };
-
-        if (status && Object.values(memoStatus).includes(status)) {
-            query.status = status;
-        }
-        if (severity && Object.values(memoSeverity).includes(severity)) {
-            query.severity = severity;
-        }
-        if (search) {
-            query.$or = [
-                { title: { $regex: search, $options: 'i' } },
-                { content: { $regex: search, $options: 'i' } }
-            ];
-        }
-
-        const [memos, total] = await Promise.all([
-            Memo.find(query)
-                .populate('createdBy', 'name email profilePicture')
-                .populate('recipients', 'name email')
-                .sort({ [sortBy]: sortOrder === 'desc' ? -1 : 1 })
-                .skip((page - 1) * limit)
-                .limit(parseInt(limit)),
-            Memo.countDocuments(query)
-        ]);
-
-        res.json({
-            success: true,
-            data: memos,
-            pagination: {
-                total,
-                page: parseInt(page),
-                limit: parseInt(limit),
-                totalPages: Math.ceil(total / limit)
-            }
-        });
+        const { memos, pagination } = await MemoService.getMemos({ ...req.query, userId }, req.user);
+        successResponse(res, memos, 'Memos retrieved successfully', 200, pagination);
     } catch (error) {
         next(error);
     }
@@ -250,73 +159,8 @@ export const getMemosForUser = async (req, res, next) => {
  */
 export const getUserMemos = async (req, res, next) => {
     try {
-        const {
-            status = 'active',
-            severity,
-            page = 1,
-            limit = 20,
-            sortBy = 'createdAt',
-            sortOrder = 'desc',
-            search
-        } = req.query;
-
-        // Validate status
-        if (!Object.values(memoStatus).includes(status)) {
-            throw new BadRequestError('Invalid status value');
-        }
-
-        // Build query
-        const query = { recipients: req.user._id };
-
-        // Filter by status
-        if (status === 'active') {
-            query.$or = [
-                { expiresAt: { $gt: new Date() } },
-                { expiresAt: null }
-            ];
-            query.status = 'active';
-        } else if (status === 'expired') {
-            query.expiresAt = { $lte: new Date() };
-            query.status = 'active';
-        } else {
-            query.status = status;
-        }
-
-        // Filter by severity
-        if (severity && Object.values(memoSeverity).includes(severity)) {
-            query.severity = severity;
-        }
-
-        // Search by title or content
-        if (search) {
-            query.$or = [
-                ...(query.$or || []),
-                { title: { $regex: search, $options: 'i' } },
-                { content: { $regex: search, $options: 'i' } }
-            ];
-        }
-
-        // Execute query with pagination
-        const [memos, total] = await Promise.all([
-            Memo.find(query)
-                .populate('createdBy', 'name email profilePicture')
-                .populate('recipients', 'name email')
-                .sort({ [sortBy]: sortOrder === 'desc' ? -1 : 1 })
-                .skip((page - 1) * limit)
-                .limit(parseInt(limit)),
-            Memo.countDocuments(query)
-        ]);
-
-        res.json({
-            success: true,
-            data: memos,
-            pagination: {
-                total,
-                page: parseInt(page),
-                limit: parseInt(limit),
-                totalPages: Math.ceil(total / limit)
-            }
-        });
+        const { memos, pagination } = await MemoService.getMemos(req.query, req.user);
+        successResponse(res, memos, 'Memos retrieved successfully', 200, pagination);
     } catch (error) {
         next(error);
     }
@@ -344,10 +188,7 @@ export const getMemoById = async (req, res, next) => {
             throw new NotFoundError('Memo not found or access denied');
         }
 
-        res.json({
-            success: true,
-            data: memo
-        });
+        successResponse(res, memo, 'Memo retrieved successfully');
     } catch (error) {
         next(error);
     }
@@ -383,10 +224,7 @@ export const markMemoAsRead = async (req, res, next) => {
             readBy: req.user._id
         });
 
-        res.json({
-            success: true,
-            message: 'Memo marked as read'
-        });
+        successResponse(res, null, 'Memo marked as read');
     } catch (error) {
         next(error);
     }
@@ -419,10 +257,7 @@ export const acknowledgeMemo = async (req, res, next) => {
             acknowledgedAt: new Date()
         });
 
-        res.json({
-            success: true,
-            message: 'Memo acknowledged successfully'
-        });
+        successResponse(res, null, 'Memo acknowledged successfully');
     } catch (error) {
         next(error);
     }
@@ -448,10 +283,7 @@ export const snoozeMemo = async (req, res, next) => {
 
         await memo.snooze(req.user._id, durationMinutes, comments);
 
-        res.json({
-            success: true,
-            message: `Memo snoozed for ${durationMinutes} minutes`
-        });
+        successResponse(res, null, `Memo snoozed for ${durationMinutes} minutes`);
     } catch (error) {
         next(error);
     }
@@ -519,10 +351,8 @@ export const updateMemo = async (req, res, next) => {
         // Emit real-time update
         io.emit('memo_updated', memo);
 
-        res.json({
-            success: true,
-            data: await memo.populate(['createdBy', 'recipients'])
-        });
+        const populatedMemo = await memo.populate(['createdBy', 'recipients']);
+        successResponse(res, populatedMemo, 'Memo updated successfully');
     } catch (error) {
         next(error);
     }
@@ -554,10 +384,7 @@ export const deleteMemo = async (req, res, next) => {
         // Emit real-time update
         io.emit('memo_deleted', { memoId: memo._id });
 
-        res.json({
-            success: true,
-            message: 'Memo deleted successfully'
-        });
+        successResponse(res, null, 'Memo deleted successfully');
     } catch (error) {
         next(error);
     }
@@ -602,13 +429,13 @@ export const getMemoStats = async (req, res, next) => {
                             initialValue: {},
                             in: {
                                 $mergeObjects: [
-                                    '$$value',
+                                    '$value',
                                     {
                                         $let: {
-                                            vars: { sev: '$$this.severity' },
+                                            vars: { sev: '$this.severity' },
                                             in: {
                                                 $arrayToObject: [[
-                                                    { k: '$$sev', v: { $sum: ['$$value.$$sev', 1] } }
+                                                    { k: '$sev', v: { $sum: ['$value.$sev', 1] } }
                                                 ]]
                                             }
                                         }
@@ -621,10 +448,7 @@ export const getMemoStats = async (req, res, next) => {
             }
         ]);
 
-        res.json({
-            success: true,
-            data: stats
-        });
+        successResponse(res, stats, 'Memo stats retrieved successfully');
     } catch (error) {
         next(error);
     }
@@ -640,7 +464,7 @@ export const getMemoCount = async (req, res) => {
         const count = await Memo.countDocuments();
         res.json({ count });
     } catch (error) {
-        res.status(500).json({ error: "Internal server error" });
+        errorResponse(res, error, 'Internal server error');
     }
 };
 
@@ -680,9 +504,9 @@ export const getMemosReadOverTime = async (req, res) => {
             result.push({ date: dateStr, count: found ? found.count : 0 });
         }
 
-        res.json({ success: true, data: result });
+        successResponse(res, result, 'Memos read over time retrieved successfully');
     } catch (error) {
         console.error('Error getting memos read over time:', error);
-        res.status(500).json({ message: 'Failed to get memos read analytics' });
+        errorResponse(res, error, 'Failed to get memos read analytics');
     }
 };

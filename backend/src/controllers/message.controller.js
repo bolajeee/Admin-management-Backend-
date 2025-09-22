@@ -198,9 +198,12 @@ export const getEmployeeCount = async (req, res) => {
 
 export const getRecentMessages = async (req, res) => {
     try {
-        const messages = await Message.find({})
+        const userId = req.user._id;
+        const messages = await Message.find({
+            $or: [{ sender: userId }, { receiver: userId }]
+        })
             .sort({ createdAt: -1 })
-            .limit(5)
+            .limit(15)
             .populate('sender', 'name email profilePicture')
             .populate('receiver', 'name email profilePicture');
             

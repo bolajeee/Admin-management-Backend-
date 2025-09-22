@@ -11,6 +11,7 @@ import {
   getReportData
 } from '../controllers/report.controller.js';
 import { protectRoute, authorize } from '../middleware/auth.middleware.js';
+import { sanitizeInput } from '../middleware/sanitization.middleware.js';
 
 // Set up directory for uploads
 const __filename = fileURLToPath(import.meta.url);
@@ -89,10 +90,10 @@ router.use(protectRoute);
 router.use(authorize(['admin']));
 
 // File upload and management routes
-router.post('/upload', handleUpload, uploadReportData);
+router.post('/upload', sanitizeInput, handleUpload, uploadReportData);
 router.get('/uploaded-reports', getUploadedReports);
-router.get('/uploaded-reports/:reportId', getReportData);
-router.get('/export', exportReport);
+router.get('/uploaded-reports/:reportId', sanitizeInput, getReportData);
+router.get('/export', sanitizeInput, exportReport);
 
 
 

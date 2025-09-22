@@ -1,11 +1,17 @@
 // Utils to standardize API responses and error handling
 
-export const successResponse = (res, data, message = 'Success', statusCode = 200) => {
-  res.status(statusCode).json({
+export const successResponse = (res, data, message = 'Success', statusCode = 200, pagination) => {
+  const response = {
     success: true,
     message,
     data
-  });
+  };
+
+  if (pagination) {
+    response.pagination = pagination;
+  }
+
+  res.status(statusCode).json(response);
 };
 
 export const errorResponse = (res, error, message = 'Internal server error', statusCode = 500) => {
