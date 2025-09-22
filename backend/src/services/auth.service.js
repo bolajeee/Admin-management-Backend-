@@ -1,5 +1,6 @@
 import bcrypt from 'bcryptjs';
 import User from '../models/user.model.js';
+import Role from '../models/role.model.js';
 import { generateToken } from '../lib/utils/utils.js';
 
 class AuthService {
@@ -15,14 +16,19 @@ class AuthService {
   static async createUserWithRole(userData) {
     const { name, email, role, password } = userData;
     
+    const userRole = await Role.findOne({ name: role || 'employee' });
+    if (!userRole) {
+      throw new Error('Role not found');
+    }
+
     // Set default password based on role if not provided
-    const defaultPassword = password || (role === 'admin' ? 'admin' : 'employee');
+    const defaultPassword = password || (userRole.name === 'admin' ? 'admin' : 'employee');
     const hashedPassword = await this.hashPassword(defaultPassword);
 
     const user = new User({
       name,
       email,
-      role,
+      role: userRole._id,
       password: hashedPassword
     });
 
@@ -30,11 +36,11 @@ class AuthService {
   }
 
   static getDefaultPassword(role) {
-    return role === 'admin' ? 'admin' : 'employee';
+    return role.name === 'admin' ? 'admin' : 'employee';
   }
 
   static async resetUserPassword(userId) {
-    const user = await User.findById(userId);
+    const user = await User.findById(userId).populate('role');
     if (!user) return null;
 
     const defaultPassword = this.getDefaultPassword(user.role);

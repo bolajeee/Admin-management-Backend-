@@ -41,7 +41,7 @@ export const protectRoute = async (req, res, next) => {
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
         console.log('Token verified successfully');
 
-        const user = await User.findById(decoded.userId || decoded.id).select("-password");
+        const user = await User.findById(decoded.userId || decoded.id).select("-password").populate('role');
         if (!user) {
             console.log('User not found for token:', decoded);
             return res.status(401).json({ 
@@ -88,9 +88,9 @@ export const protectRoute = async (req, res, next) => {
 };
 
 // Authorization middleware to check user roles
-export const authorize = (roles = []) => {
-    // Convert single role to array
-    const allowedRoles = Array.isArray(roles) ? roles : [roles];
+export const authorize = (requiredPermissions = []) => {
+    // Convert single permission to array
+    const permissions = Array.isArray(requiredPermissions) ? requiredPermissions : [requiredPermissions];
 
     return async (req, res, next) => {
         try {
@@ -103,19 +103,22 @@ export const authorize = (roles = []) => {
                 });
             }
 
-            // If no roles specified, any authenticated user can access
-            if (allowedRoles.length === 0) {
+            // If no permissions specified, any authenticated user can access
+            if (permissions.length === 0) {
                 return next();
             }
 
-            // Check if user has required role
-            if (!allowedRoles.includes(req.user.role)) {
+            // Check if user has required permissions
+            const userPermissions = req.user.role ? req.user.role.permissions : [];
+            const hasPermission = permissions.every(p => userPermissions.includes(p));
+
+            if (!hasPermission) {
                 return res.status(403).json({
                     success: false,
                     message: 'Insufficient permissions',
                     code: 'FORBIDDEN',
-                    requiredRoles: allowedRoles,
-                    userRole: req.user.role
+                    requiredPermissions: permissions,
+                    userPermissions: userPermissions
                 });
             }
 

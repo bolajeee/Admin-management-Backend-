@@ -16,6 +16,9 @@ import dashboardRoute from './routes/dashboard.route.js';
 import adminRoute from './routes/admin.route.js';
 import reportRoute from './routes/report.route.js';
 import settingsRoute from './routes/settings.route.js';
+import roleRoute from './routes/role.route.js';
+import teamRoute from './routes/team.route.js';
+import auditRoute from './routes/audit.route.js';
 
 import fs from 'fs';
 import path from 'path';
@@ -102,6 +105,9 @@ app.use("/api/tasks", taskRoute);
 app.use("/api/dashboard", dashboardRoute);
 app.use("/api/admin", adminRoute);
 app.use("/api/reports", reportRoute);
+app.use("/api/roles", roleRoute);
+app.use("/api/teams", teamRoute);
+app.use("/api/audit", auditRoute);
 
 // Socket.IO connection handling
 io.on('connection', (socket) => {

@@ -3,6 +3,7 @@ import User from '../models/user.model.js';
 import Message from '../models/message.model.js';
 import cloudinary from "../lib/cloudinary.js";
 import AuthService from '../services/auth.service.js';
+import AuditService from '../services/audit.service.js';
 import { AuthValidation } from '../utils/authValidation.js';
 import { successResponse, errorResponse, validationError } from '../utils/responseHandler.js';
 
@@ -31,6 +32,11 @@ export const signupUser = async (req, res) => {
 
         const user = await AuthService.createUserWithRole(userData);
         generateToken(user._id, res);
+
+        await AuditService.createAuditLog({
+            user: user._id,
+            action: 'user_signup',
+        });
 
         return successResponse(
             res,
@@ -63,6 +69,10 @@ export const loginUser = async (req, res) => {
         }
 
         generateToken(user._id, res);
+        await AuditService.createAuditLog({
+            user: user._id,
+            action: 'user_login',
+        });
         return successResponse(res, AuthService.generateAuthResponse(user), 'Login successful');
     } catch (error) {
         return errorResponse(res, error, 'Error during login');
@@ -137,6 +147,11 @@ export const deleteUser = async (req, res) => {
         if (!deletedUser) {
             return res.status(404).json({ message: "User not found" });
         }
+        await AuditService.createAuditLog({
+            user: req.user._id,
+            action: 'user_deleted',
+            details: { userId: id, email: deletedUser.email }
+        });
         res.status(200).json({ message: "User deleted successfully" });
     } catch (error) {
         console.error("Error deleting user:", error.message);
@@ -158,6 +173,11 @@ export const createUser = async (req, res) => {
         }
 
         const user = await AuthService.createUserWithRole({ name, email, role, password });
+        await AuditService.createAuditLog({
+            user: req.user._id,
+            action: 'user_created',
+            details: { userId: user._id, email: user.email }
+        });
         return successResponse(
             res, 
             AuthService.generateAuthResponse(user),
@@ -177,6 +197,11 @@ export const toggleUserActive = async (req, res) => {
         if (!user) return res.status(404).json({ message: 'User not found' });
         user.isActive = !user.isActive;
         await user.save();
+        await AuditService.createAuditLog({
+            user: req.user._id,
+            action: user.isActive ? 'user_activated' : 'user_deactivated',
+            details: { userId: id, email: user.email }
+        });
         res.status(200).json({ message: `User ${user.isActive ? 'activated' : 'deactivated'} successfully`, isActive: user.isActive });
     } catch (error) {
         res.status(500).json({ message: 'Failed to update user status' });
@@ -195,6 +220,12 @@ export const resetUserPassword = async (req, res) => {
         if (!updatedUser) {
             return errorResponse(res, null, 'User not found', 404);
         }
+
+        await AuditService.createAuditLog({
+            user: req.user._id,
+            action: 'user_password_reset',
+            details: { userId: id, email: updatedUser.email }
+        });
 
         return successResponse(res, null, 'Password reset to default');
     } catch (error) {

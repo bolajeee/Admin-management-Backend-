@@ -24,9 +24,12 @@ const userSchema = new mongoose.Schema({
     trim: true,
   },
   role: {
-    type: String,
-    enum: ['admin', 'employee'],
-    default: 'employee',
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Role',
+  },
+  team: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Team',
   },
   profilePicture: {
     type: String,
@@ -74,6 +77,7 @@ const userSchema = new mongoose.Schema({
 // Index for faster queries on commonly used fields
 userSchema.index({ email: 1 });
 userSchema.index({ role: 1 });
+userSchema.index({ team: 1 });
 
 const User = mongoose.model("User", userSchema);
 

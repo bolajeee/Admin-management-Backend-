@@ -3,6 +3,7 @@ import User from '../models/user.model.js';
 import { io } from '../index.js';
 import NotificationService from '../services/notification.service.js';
 import { MemoService } from '../services/memo.service.js';
+import AuditService from '../services/audit.service.js';
 import { successResponse, errorResponse } from '../utils/responseHandler.js';
 import { NotFoundError, ForbiddenError, BadRequestError } from '../utils/errors.js';
 
@@ -25,12 +26,12 @@ export const createMemo = async (req, res, next) => {
         } = req.body;
 
         // Validate recipients
-        if (recipients.length === 0 && req.user.role !== 'admin') {
+        if (recipients.length === 0 && req.user.role.name !== 'admin') {
             throw new BadRequestError('At least one recipient is required');
         }
 
         // For non-admin users, ensure they can only send to themselves or their team
-        if (req.user.role !== 'admin') {
+        if (req.user.role.name !== 'admin') {
             const validRecipients = await User.find({
                 _id: { $in: recipients },
                 $or: [
@@ -79,6 +80,12 @@ export const createMemo = async (req, res, next) => {
             populatedMemo.recipients.map(r => r._id)
         );
 
+        await AuditService.createAuditLog({
+            user: req.user._id,
+            action: 'memo_created',
+            details: { memoId: memo._id, title: memo.title }
+        });
+
         successResponse(res, populatedMemo, 'Memo created successfully', 201);
     } catch (error) {
         next(error);
@@ -109,7 +116,7 @@ export const createMemoForAllUsers = async (req, res, next) => {
         const { title, content, summary = '', severity = memoSeverity.LOW, deadline, expiresAt, metadata = {} } = req.body;
 
         // Only admin can broadcast
-        if (req.user.role !== 'admin') {
+        if (req.user.role.name !== 'admin') {
             return res.status(403).json({ message: 'Forbidden: Only admin can broadcast memos.' });
         }
 
@@ -130,6 +137,12 @@ export const createMemoForAllUsers = async (req, res, next) => {
         });
 
         await memo.save();
+
+        await AuditService.createAuditLog({
+            user: req.user._id,
+            action: 'memo_broadcasted',
+            details: { memoId: memo._id, title: memo.title }
+        });
 
         successResponse(res, memo, 'Memo sent to all users', 201);
     } catch (error) {
@@ -324,7 +337,7 @@ export const updateMemo = async (req, res, next) => {
         // Handle recipients update
         if (recipients && Array.isArray(recipients)) {
             // For non-admin users, validate recipients
-            if (req.user.role !== 'admin') {
+            if (req.user.role.name !== 'admin') {
                 const validRecipients = await User.find({
                     _id: { $in: recipients },
                     $or: [
@@ -352,6 +365,11 @@ export const updateMemo = async (req, res, next) => {
         io.emit('memo_updated', memo);
 
         const populatedMemo = await memo.populate(['createdBy', 'recipients']);
+        await AuditService.createAuditLog({
+            user: req.user._id,
+            action: 'memo_updated',
+            details: { memoId: memo._id, title: memo.title }
+        });
         successResponse(res, populatedMemo, 'Memo updated successfully');
     } catch (error) {
         next(error);
@@ -383,6 +401,12 @@ export const deleteMemo = async (req, res, next) => {
 
         // Emit real-time update
         io.emit('memo_deleted', { memoId: memo._id });
+
+        await AuditService.createAuditLog({
+            user: req.user._id,
+            action: 'memo_deleted',
+            details: { memoId: memo._id, title: memo.title }
+        });
 
         successResponse(res, null, 'Memo deleted successfully');
     } catch (error) {
