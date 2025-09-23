@@ -10,8 +10,10 @@ import { successResponse, errorResponse, validationError } from '../utils/respon
 
 export const signupUser = async (req, res) => {
     try {
+        console.log('signupUser: req.body', req.body);
         const validation = AuthValidation.validateSignup(req.body);
         if (!validation.isValid) {
+            console.log('signupUser: validation errors', validation.errors);
             return validationError(res, validation.errors);
         }
 
@@ -19,6 +21,7 @@ export const signupUser = async (req, res) => {
 
         const userExists = await User.findOne({ email });
         if (userExists) {
+            console.log('signupUser: user already exists');
             return errorResponse(res, null, 'User already exists', 400);
         }
 
@@ -45,14 +48,17 @@ export const signupUser = async (req, res) => {
             201
         );
     } catch (error) {
+        console.error('signupUser: error', error);
         return errorResponse(res, error, 'Error creating user');
     }
 }
 
 export const loginUser = async (req, res) => {
     try {
+        console.log('loginUser: req.body', req.body);
         const validation = AuthValidation.validateLogin(req.body);
         if (!validation.isValid) {
+            console.log('loginUser: validation errors', validation.errors);
             return validationError(res, validation.errors);
         }
 
@@ -60,11 +66,13 @@ export const loginUser = async (req, res) => {
         const user = await User.findOne({ email });
 
         if (!user) {
+            console.log('loginUser: user not found');
             return errorResponse(res, null, 'Invalid email or password', 400);
         }
 
         const isPasswordCorrect = await AuthService.comparePasswords(password, user.password);
         if (!isPasswordCorrect) {
+            console.log('loginUser: invalid password');
             return errorResponse(res, null, 'Invalid email or password', 400);
         }
 
@@ -75,6 +83,7 @@ export const loginUser = async (req, res) => {
         });
         return successResponse(res, AuthService.generateAuthResponse(user), 'Login successful');
     } catch (error) {
+        console.error('loginUser: error', error);
         return errorResponse(res, error, 'Error during login');
     }
 }

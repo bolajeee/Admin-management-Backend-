@@ -10,6 +10,8 @@ class AuthService {
   }
 
   static async comparePasswords(plainPassword, hashedPassword) {
+    console.log('comparePasswords: plainPassword', plainPassword);
+    console.log('comparePasswords: hashedPassword', hashedPassword);
     return await bcrypt.compare(plainPassword, hashedPassword);
   }
 
@@ -49,11 +51,15 @@ class AuthService {
   }
 
   static generateAuthResponse(user) {
+    console.log('generateAuthResponse: user', user);
     return {
       _id: user._id,
       name: user.name,
       email: user.email,
-      role: user.role,
+      role: {
+        _id: user.role._id,
+        name: user.role.name
+      },
       profilePicture: user.profilePicture
     };
   }
