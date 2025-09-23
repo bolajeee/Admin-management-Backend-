@@ -5,6 +5,7 @@ import cloudinary from "../lib/cloudinary.js";
 import AuthService from '../services/auth.service.js';
 import AuditService from '../services/audit.service.js';
 import { AuthValidation } from '../utils/authValidation.js';
+import ValidationUtils from '../utils/validationUtils.js';
 import { successResponse, errorResponse, validationError } from '../utils/responseHandler.js';
 
 
