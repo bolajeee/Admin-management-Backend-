@@ -18,9 +18,9 @@ class AuthService {
   static async createUserWithRole(userData) {
     const { name, email, role, password } = userData;
     
-    const userRole = await Role.findOne({ name: role || 'employee' });
+    let userRole = await Role.findOne({ name: role || 'employee' });
     if (!userRole) {
-      throw new Error('Role not found');
+      userRole = await Role.create({ name: role || 'employee', permissions: [] });
     }
 
     // Set default password based on role if not provided
@@ -34,7 +34,8 @@ class AuthService {
       password: hashedPassword
     });
 
-    return await user.save();
+    await user.save();
+    return user.populate('role');
   }
 
   static getDefaultPassword(role) {

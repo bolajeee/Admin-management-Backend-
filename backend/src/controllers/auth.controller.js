@@ -25,11 +25,10 @@ export const signupUser = async (req, res) => {
             return errorResponse(res, null, 'User already exists', 400);
         }
 
-        const hashedPassword = await AuthService.hashPassword(password);
         const userData = {
             name,
             email,
-            password: hashedPassword,
+            password, // Pass plaintext password
             role: 'employee' // Default role
         };
 
@@ -203,7 +202,11 @@ export const toggleUserActive = async (req, res) => {
     try {
         const { id } = req.params;
         const user = await User.findById(id);
-        if (!user) return res.status(404).json({ message: 'User not found' });
+        if (!user) {
+            console.error(`[toggleUserActive] User not found for id: ${id}`);
+            return res.status(404).json({ message: 'User not found' });
+        }
+        console.log(`[toggleUserActive] Found user:`, user);
         user.isActive = !user.isActive;
         await user.save();
         await AuditService.createAuditLog({
@@ -213,7 +216,8 @@ export const toggleUserActive = async (req, res) => {
         });
         res.status(200).json({ message: `User ${user.isActive ? 'activated' : 'deactivated'} successfully`, isActive: user.isActive });
     } catch (error) {
-        res.status(500).json({ message: 'Failed to update user status' });
+        console.error(`[toggleUserActive] Error:`, error);
+        res.status(500).json({ message: 'Failed to update user status', error: error.message });
     }
 };
 

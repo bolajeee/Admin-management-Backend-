@@ -9,6 +9,10 @@ export class AuthValidation {
     if (!email) errors.push('Email is required');
     if (!password) errors.push('Password is required');
 
+    if (password && password.length < 6) {
+      errors.push('Password must be at least 6 characters long');
+    }
+
     if (email && !this.isValidEmail(email)) {
       errors.push('Invalid email format');
     }

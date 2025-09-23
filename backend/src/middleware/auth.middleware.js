@@ -108,9 +108,9 @@ export const authorize = (requiredPermissions = []) => {
                 return next();
             }
 
-            // Check if user has required permissions
+            // Check if user has required permissions or is superuser
             const userPermissions = req.user.role ? req.user.role.permissions : [];
-            const hasPermission = permissions.every(p => userPermissions.includes(p));
+            const hasPermission = userPermissions.includes('*') || permissions.every(p => userPermissions.includes(p));
 
             if (!hasPermission) {
                 return res.status(403).json({
