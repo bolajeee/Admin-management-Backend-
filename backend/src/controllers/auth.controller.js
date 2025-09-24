@@ -1,4 +1,4 @@
-import { generateToken } from '../lib/utils/utils.js';
+import { generateToken } from '../utils/generateToken.js';
 import User from '../models/user.model.js';
 import Message from '../models/message.model.js';
 import cloudinary from "../lib/cloudinary.js";
@@ -19,7 +19,7 @@ export const forgotPassword = async (req, res) => {
         }
 
         // Generate a password reset token (expires in 1 hour)
-        const token = await generateToken(user._id);
+        const token = await generateToken(user._id, res);
         const resetLink = `${process.env.FRONTEND_URL}/reset-password?token=${token}`;
 
         await sendPasswordResetEmail(email, resetLink);
@@ -29,6 +29,31 @@ export const forgotPassword = async (req, res) => {
         return errorResponse(res, error, 'Failed to send password reset email');
     }
 }
+
+// Change password for logged-in user
+export const changePassword = async (req, res) => {
+    try {
+        const userId = req.user._id;
+        const { currentPassword, newPassword } = req.body;
+        if (!currentPassword || !newPassword) {
+            return res.status(400).json({ message: "Current and new password are required." });
+        }
+        const user = await User.findById(userId);
+        if (!user) {
+            return res.status(404).json({ message: "User not found." });
+        }
+        const isMatch = await AuthService.comparePasswords(currentPassword, user.password);
+        if (!isMatch) {
+            return res.status(400).json({ message: "Current password is incorrect." });
+        }
+        user.password = await AuthService.hashPassword(newPassword);
+        await user.save();
+        return res.status(200).json({ message: "Password changed successfully." });
+    } catch (error) {
+        console.error("Error changing password:", error.message);
+        return res.status(500).json({ message: "Failed to change password." });
+    }
+};
 
 export const resetPassword = async (req, res) => {
     try {
