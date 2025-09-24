@@ -1,5 +1,5 @@
 import express from "express";
-import { signupUser, loginUser, logoutUser, updateProfile, checkAuthStatus, deleteUser, createUser } from "../controllers/auth.controller.js";
+import { signupUser, loginUser, logoutUser, updateProfile, checkAuthStatus, deleteUser, createUser, forgotPassword, resetPassword } from "../controllers/auth.controller.js";
 import { authorize, protectRoute } from "../middleware/auth.middleware.js";
 import { sanitizeInput } from "../middleware/sanitization.middleware.js";
 
@@ -28,6 +28,9 @@ const upload = multer({
 router.post("/signup", sanitizeInput, signupUser);
 router.post("/login", sanitizeInput, trackLoginFailure, loginUser, trackLogin);
 router.post("/logout", logoutUser);
+router.post("/forgot-password", sanitizeInput, forgotPassword);
+router.post("/reset-password", sanitizeInput, resetPassword);
+
 
 //protected routes
 

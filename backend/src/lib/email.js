@@ -11,6 +11,28 @@ const transporter = nodemailer.createTransport({
     }
 });
 
+
+// Send password reset email
+export const sendPasswordResetEmail = async (recipientEmail, resetLink) => {
+    try {
+        const subject = 'Password Reset Request';
+        const html = `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                <h2>Password Reset</h2>
+                <p>You requested a password reset for your account.</p>
+                <p>Click the link below to reset your password. This link will expire soon for security reasons.</p>
+                <p><a href="${resetLink}" style="background-color: #3498db; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">Reset Password</a></p>
+                <p>If you did not request this, please ignore this email.</p>
+                <p>This is an automated message. Please do not reply to this email.</p>
+            </div>
+        `;
+        return await sendEmail(recipientEmail, subject, html);
+    } catch (error) {
+        console.error('Error sending password reset email:', error);
+        throw error;
+    }
+};
+
 export const sendEmail = async (to, subject, html, text = '') => {
     try {
         const mailOptions = {

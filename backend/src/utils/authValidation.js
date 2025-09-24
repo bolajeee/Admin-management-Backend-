@@ -1,6 +1,40 @@
 import ValidationUtils from './validationUtils.js';
 
 export class AuthValidation {
+  static validateForgotPassword(data) {
+    const { email } = data;
+    const errors = [];
+
+    if (!email) errors.push('Email is required');
+    if (email && !this.isValidEmail(email)) {
+      errors.push('Invalid email format');
+    }
+
+    return {
+      isValid: errors.length === 0,
+      errors
+    };
+  }
+
+  static validateResetPassword(data) {
+    const { token, newPassword, confirmPassword } = data;
+    const errors = [];
+
+    if (!token) errors.push('Token is required');
+    if (!newPassword) errors.push('New password is required');
+    if (newPassword && newPassword.length < 6) {
+      errors.push('Password must be at least 6 characters long');
+    }
+    if (newPassword !== confirmPassword) {
+      errors.push('Passwords do not match');
+    }
+
+    return {
+      isValid: errors.length === 0,
+      errors
+    };
+  }
+
   static validateSignup(data) {
     const { name, email, password } = data;
     const errors = [];

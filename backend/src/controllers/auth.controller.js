@@ -7,7 +7,40 @@ import AuditService from '../services/audit.service.js';
 import { AuthValidation } from '../utils/authValidation.js';
 import ValidationUtils from '../utils/validationUtils.js';
 import { successResponse, errorResponse, validationError } from '../utils/responseHandler.js';
+import { sendPasswordResetEmail } from '../lib/email.js';
 
+
+export const forgotPassword = async (req, res) => {
+    try {
+        const { email } = req.body;
+        const user = await User.findOne({ email });
+        if (!user) {
+            return errorResponse(res, null, 'User not found', 404);
+        }
+
+        // Generate a password reset token (expires in 1 hour)
+        const token = await generateToken(user._id);
+        const resetLink = `${process.env.FRONTEND_URL}/reset-password?token=${token}`;
+
+        await sendPasswordResetEmail(email, resetLink);
+
+        return successResponse(res, null, 'Password reset email sent');
+    } catch (error) {
+        return errorResponse(res, error, 'Failed to send password reset email');
+    }
+}
+
+export const resetPassword = async (req, res) => {
+    try {
+        const { token, newPassword } = req.body;
+
+        await AuthService.resetPassword(token, newPassword);
+
+        return successResponse(res, null, 'Password has been reset');
+    } catch (error) {
+        return errorResponse(res, error, 'Failed to reset password');
+    }
+}
 
 export const signupUser = async (req, res) => {
     try {
