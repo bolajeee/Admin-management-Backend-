@@ -61,13 +61,6 @@ const userSchema = new mongoose.Schema({
   privacy: {
     showOnlineStatus: { type: Boolean, default: true },
     showReadReceipts: { type: Boolean, default: true }
-  },
-  // System settings would typically be in a separate model
-  // but included here for simplicity
-  system: {
-    autoUserCleanup: { type: Boolean, default: false },
-    dailyBackups: { type: Boolean, default: true },
-    maintenanceMode: { type: Boolean, default: false }
   }
 },
 }, {

@@ -7,7 +7,8 @@
     "server": "nodemon src/index.js",
     "test": "cross-env NODE_ENV=test node --experimental-vm-modules node_modules/jest/bin/jest.js",
     "create-admin": "node src/scripts/createAdmin.js",
-    "fix-user-roles": "node src/scripts/fixUserRoles.js"
+    "fix-user-roles": "node src/scripts/fixUserRoles.js",
+    "seed:settings": "node src/scripts/seedSettings.js"
   },
   "keywords": [],
   "author": "",
@@ -29,7 +30,8 @@
     "nodemailer": "^7.0.6",
     "socket.io": "^4.8.1",
     "streamifier": "^0.1.1",
-    "twilio": "^5.7.1"
+    "twilio": "^5.7.1",
+    "express-rate-limit": "^7.2.0"
   },
   "devDependencies": {
     "cross-env": "^10.0.0",

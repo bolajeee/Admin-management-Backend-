@@ -102,7 +102,7 @@ const __dirname = path.dirname(__filename);
 
 // Routes
 app.use("/api/auth", authRoute);
-app.use("/api/users/settings", settingsRoute);
+app.use("/api/settings", settingsRoute);
 app.use("/api/messages", messageRoute);
 app.use("/api/memos", memoRoute);
 app.use("/api/tasks", taskRoute);

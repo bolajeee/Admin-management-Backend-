@@ -1,16 +1,19 @@
 import User from "../models/user.model.js";
+import Settings from "../models/settings.model.js";
+import AuditService from "../services/audit.service.js";
+import { successResponse, errorResponse } from "../utils/responseHandler.js";
+import { NotFoundError, BadRequestError } from "../utils/errors.js";
 
-export const getUserSettings = async (req, res) => {
-  try {  
+export const getUserSettings = async (req, res, next) => {
+  try {
     const userId = req.user.userId || req.user.id || req.user._id;
     const user = await User.findById(userId);
-    
+
     if (!user) {
-      return res.status(404).json({ message: "User not found" });
+      throw new NotFoundError("User not found");
     }
-    
-    // This assumes you've added settings fields to your user model
-    // If not, you'll need to create a separate settings model
+
+    // Return user-specific settings with defaults
     const settings = {
       notifications: user.settings?.notifications || {
         email: true,
@@ -22,52 +25,116 @@ export const getUserSettings = async (req, res) => {
         showReadReceipts: true
       }
     };
-    
-    // Add system settings for admin users
-    if (user.role === "admin") {
-      settings.system = {
-        autoUserCleanup: false,
-        dailyBackups: true,
-        maintenanceMode: false
-      };
-    }
-    
-    res.status(200).json(settings);
+
+    successResponse(res, settings, "User settings retrieved successfully");
   } catch (error) {
-    console.error("Error getting user settings:", error);
-    res.status(500).json({ message: "Failed to get user settings" });
+    next(error);
   }
 };
 
-export const updateUserSettings = async (req, res) => {
+export const updateUserSettings = async (req, res, next) => {
   try {
-    const userId = req.user.userId || req.user.id || req.user._id;
-     const updatedSettings = req.body;
-    
+    // If admin is updating another user's settings, use req.params.userId
+    const userId = req.params.userId || req.user.userId || req.user.id || req.user._id;
+    const updates = req.body;
+
+    // Validate updates
+    const allowedUpdates = ['notifications', 'privacy'];
+    const invalidUpdates = Object.keys(updates).filter(key => !allowedUpdates.includes(key));
+    if (invalidUpdates.length > 0) {
+      throw new BadRequestError(`Invalid settings keys: ${invalidUpdates.join(', ')}`);
+    }
+
     const user = await User.findById(userId);
-    
     if (!user) {
-      return res.status(404).json({ message: "User not found" });
+      throw new NotFoundError("User not found");
     }
-    
-    // Ensure we're only updating allowed settings
-    const allowedSettings = {
-      notifications: updatedSettings.notifications,
-      privacy: updatedSettings.privacy
-    };
-    
-    // Add system settings for admin users
-    if (user.role === "admin" && updatedSettings.system) {
-      allowedSettings.system = updatedSettings.system;
+
+    // Apply partial updates to nested fields
+    const originalSettings = JSON.parse(JSON.stringify(user.settings)); // Deep copy for audit
+    if (updates.notifications) {
+      user.settings.notifications = {
+        ...user.settings.notifications,
+        ...updates.notifications
+      };
     }
-    
-    // Update user settings
-    user.settings = allowedSettings;
+    if (updates.privacy) {
+      user.settings.privacy = {
+        ...user.settings.privacy,
+        ...updates.privacy
+      };
+    }
+
     await user.save();
-    
-    res.status(200).json({ message: "Settings updated successfully" });
+
+    // Audit log
+    await AuditService.createAuditLog({
+      user: userId,
+      action: 'user_settings_updated',
+      details: { 
+        originalSettings,
+        newSettings: user.settings
+      }
+    });
+
+    successResponse(res, user.settings, "Settings updated successfully");
   } catch (error) {
-    console.error("Error updating user settings:", error);
-    res.status(500).json({ message: "Failed to update user settings" });
+    next(error);
+  }
+};
+
+export const getSystemSettings = async (req, res, next) => {
+  try {
+    const systemSettings = await Settings.findOne({ key: 'system' });
+
+    if (!systemSettings) {
+      throw new NotFoundError("System settings not found. Please run the seeder.");
+    }
+
+    successResponse(res, systemSettings.value, "System settings retrieved successfully");
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const updateSystemSettings = async (req, res, next) => {
+  try {
+    const updates = req.body;
+
+    const systemSettings = await Settings.findOne({ key: 'system' });
+    if (!systemSettings) {
+      throw new NotFoundError("System settings not found. Please run the seeder.");
+    }
+
+    // Validate updates
+    const allowedUpdates = ['autoUserCleanup', 'dailyBackups', 'maintenanceMode'];
+    const invalidUpdates = Object.keys(updates).filter(key => !allowedUpdates.includes(key));
+    if (invalidUpdates.length > 0) {
+      throw new BadRequestError(`Invalid system settings keys: ${invalidUpdates.join(', ')}`);
+    }
+
+    const originalSettings = JSON.parse(JSON.stringify(systemSettings.value)); // Deep copy
+
+    // Apply partial updates
+    systemSettings.value = {
+      ...systemSettings.value,
+      ...updates
+    };
+
+    await systemSettings.save();
+
+    // Audit log
+    await AuditService.createAuditLog({
+      user: req.user._id,
+      action: 'system_settings_updated',
+      details: { 
+        originalSettings,
+        newSettings: systemSettings.value
+      }
+    });
+
+    successResponse(res, systemSettings.value, "System settings updated successfully");
+  } catch (error) {
+    next(error);
   }
 };
