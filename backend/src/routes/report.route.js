@@ -8,7 +8,8 @@ import {
   exportReport,
   uploadReportData,
   getUploadedReports,
-  getReportData
+  getReportData,
+  deleteUploadedReport
 } from '../controllers/report.controller.js';
 import { protectRoute, authorize } from '../middleware/auth.middleware.js';
 import { sanitizeInput } from '../middleware/sanitization.middleware.js';
@@ -93,6 +94,7 @@ router.use(authorize(['admin']));
 router.post('/upload', sanitizeInput, handleUpload, uploadReportData);
 router.get('/uploaded-reports', getUploadedReports);
 router.get('/uploaded-reports/:reportId', sanitizeInput, getReportData);
+router.delete('/uploaded-reports/:reportId', sanitizeInput, deleteUploadedReport);
 router.get('/export', sanitizeInput, exportReport);
 
 

@@ -1,13 +1,12 @@
 // backend/src/controllers/report.controller.js
-import User from "../models/user.model.js";
-import Task from "../models/task.model.js";
 import Report from "../models/report.model.js";
-import Message from "../models/message.model.js";
 import fs from 'fs/promises';
 import path from 'path';
 import exceljs from 'exceljs';
 import csv from 'csv-parser';
 import { createReadStream } from 'fs';
+import { NotFoundError } from '../utils/errors.js';
+import { successResponse } from '../utils/responseHandler.js';
 
 /**
  * Upload and process report data
@@ -37,9 +36,9 @@ export const uploadReportData = async (req, res) => {
       }
     } catch (fileError) {
       console.error('Error processing file:', fileError);
-      return res.status(400).json({ 
-        message: 'Error processing file', 
-        error: fileError.message 
+      return res.status(400).json({
+        message: 'Error processing file',
+        error: fileError.message
       });
     }
 
@@ -69,8 +68,8 @@ export const uploadReportData = async (req, res) => {
     
   } catch (error) {
     console.error('Error uploading report data:', error);
-    res.status(500).json({ 
-      message: 'Failed to upload report data', 
+    res.status(500).json({
+      message: 'Failed to upload report data',
       error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
@@ -271,5 +270,33 @@ export const exportReport = async (req, res) => {
   } catch (error) {
     console.error('Error exporting report:', error);
     res.status(500).json({ message: 'Failed to export report' });
+  }
+};
+
+/**
+ * Delete an uploaded report
+ */
+export const deleteUploadedReport = async (req, res, next) => {
+  try {
+    const report = await Report.findById(req.params.reportId);
+    if (!report) {
+      throw new NotFoundError('Report not found');
+    }
+
+    // Remove file from filesystem
+    if (report.filePath) {
+      try {
+        await fs.unlink(report.filePath);
+      } catch (err) {
+        // File may not exist, log but continue
+        console.warn('File not found or already deleted:', report.filePath);
+      }
+    }
+    // Remove from DB
+    await Report.deleteOne({ _id: report._id });
+    
+    successResponse(res, null, 'Report deleted successfully');
+  } catch (error) {
+    next(error);
   }
 };
