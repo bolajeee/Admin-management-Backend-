@@ -1,23 +1,24 @@
 import express from 'express';
 import {
-    createTask,
-    deleteTask,
-    getTasks,
-    getTaskCount,
-    updateTask,
-    debugTaskSchema,
-    getUserTasks,
-    addTaskComment,
-    getTaskComments,
-    uploadTaskAttachment,
-    listTaskAttachments,
-    deleteTaskAttachment,
-    linkMemoToTask,
-    unlinkMemoFromTask,
-    delegateTask,
-    searchTasks,
-    getTaskAuditLog,
-    getTasksCompletedOverTime
+  createTask,
+  deleteTask,
+  getTasks,
+  getTaskCount,
+  updateTask,
+  debugTaskSchema,
+  getUserTasks,
+  addTaskComment,
+  getTaskComments,
+  uploadTaskAttachment,
+  listTaskAttachments,
+  deleteTaskAttachment,
+  linkMemoToTask,
+  unlinkMemoFromTask,
+  delegateTask,
+  searchTasks,
+  getTaskAuditLog,
+  getTasksCompletedOverTime,
+  downloadTaskAttachment
 } from '../controllers/task.controller.js';
 import { protectRoute, authorize } from '../middleware/auth.middleware.js';
 import { sanitizeInput } from '../middleware/sanitization.middleware.js';
@@ -27,8 +28,17 @@ import path from 'path';
 const router = express.Router();
 
 // Configure multer for secure file uploads
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, 'uploads/')
+  },
+  filename: function (req, file, cb) {
+    cb(null, Date.now() + '-' + file.originalname)
+  }
+})
+
 const upload = multer({
-  storage: multer.diskStorage({}), // Use disk storage to avoid memory exhaustion
+  storage: storage,
   limits: { fileSize: 10 * 1024 * 1024 }, // 10MB file size limit
   fileFilter: (req, file, cb) => {
     const allowedExts = ['.png', '.jpg', '.jpeg', '.gif', '.pdf', '.doc', '.docx', '.txt', '.xls', '.xlsx', '.csv'];
@@ -70,6 +80,8 @@ router.get('/:taskId/comments', sanitizeInput, getTaskComments);
 router.post('/:taskId/attachments', sanitizeInput, upload.single('file'), uploadTaskAttachment);
 router.get('/:taskId/attachments', sanitizeInput, listTaskAttachments);
 router.delete('/:taskId/attachments/:attachmentId', sanitizeInput, deleteTaskAttachment);
+// Download attachment endpoint
+router.get('/:taskId/attachments/:attachmentId/download', sanitizeInput, protectRoute, downloadTaskAttachment);
 
 // Memo linking
 router.post('/:taskId/memos/:memoId', sanitizeInput, linkMemoToTask);

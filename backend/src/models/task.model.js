@@ -33,15 +33,6 @@ const attachmentSchema = new mongoose.Schema({
   }
 });
 
-// Recurrence sub-schema
-const recurrenceSchema = new mongoose.Schema({
-  frequency: {
-        type: String,
-    enum: ['none', 'daily', 'weekly', 'monthly'],
-    default: 'none'
-    },
-  endDate: Date
-});
 
 const taskSchema = new mongoose.Schema({
   title: {
@@ -95,7 +86,7 @@ const taskSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Memo'
   }],
-  recurrence: recurrenceSchema
+  // recurrence: recurrenceSchema
 }, {
   timestamps: true
     });

@@ -214,14 +214,18 @@ export const getMemoById = async (req, res, next) => {
  */
 export const markMemoAsRead = async (req, res, next) => {
     try {
-        const memo = await Memo.findOne({
-            _id: req.params.memoId,
-            recipients: req.user._id,
-            'readBy.user': { $ne: req.user._id }
-        });
+        const memo = await Memo.findById(req.params.memoId);
 
         if (!memo) {
-            throw new NotFoundError('Memo not found or already marked as read');
+            throw new NotFoundError('Memo not found');
+        }
+
+        if (!memo.recipients.some(recipient => recipient.equals(req.user._id))) {
+            throw new ForbiddenError('You are not a recipient of this memo');
+        }
+
+        if (memo.readBy.some(read => read.user.equals(req.user._id))) {
+            return successResponse(res, null, 'Memo already marked as read');
         }
 
         memo.readBy.push({
@@ -311,13 +315,14 @@ export const updateMemo = async (req, res, next) => {
     try {
         const { title, content, severity, recipients, deadline, expiresAt, status } = req.body;
 
-        const memo = await Memo.findOne({
-            _id: req.params.memoId,
-            createdBy: req.user._id
-        });
+        const memo = await Memo.findById(req.params.memoId);
 
         if (!memo) {
-            throw new NotFoundError('Memo not found or access denied');
+            throw new NotFoundError('Memo not found');
+        }
+
+        if (!memo.createdBy.equals(req.user._id)) {
+            throw new ForbiddenError('You are not authorized to update this memo');
         }
 
         // Allow status changes even if the memo is not currently `active`
@@ -383,13 +388,14 @@ export const updateMemo = async (req, res, next) => {
  */
 export const deleteMemo = async (req, res, next) => {
     try {
-        const memo = await Memo.findOne({
-            _id: req.params.memoId,
-            createdBy: req.user._id
-        });
+        const memo = await Memo.findById(req.params.memoId);
 
         if (!memo) {
-            throw new NotFoundError('Memo not found or access denied');
+            throw new NotFoundError('Memo not found');
+        }
+
+        if (!memo.createdBy.equals(req.user._id)) {
+            throw new ForbiddenError('You are not authorized to delete this memo');
         }
 
         // Soft delete by updating status

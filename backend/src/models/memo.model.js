@@ -96,6 +96,16 @@ const memoSchema = new mongoose.Schema({
         }
     },
     acknowledgments: [acknowledgmentSchema],
+    readBy: [{
+        user: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'User'
+        },
+        readAt: {
+            type: Date,
+            default: Date.now
+        }
+    }],
     metadata: {
         type: mongoose.Schema.Types.Mixed,
         default: {}

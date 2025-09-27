@@ -1,3 +1,43 @@
+ import path from 'path';
+      import { fileURLToPath } from 'url';
+
+// Download task attachment
+export const downloadTaskAttachment = async (req, res) => {
+  try {
+    const { taskId, attachmentId } = req.params;
+    const task = await Task.findById(taskId);
+    if (!task) {
+      return res.status(404).json({ message: 'Task not found' });
+    }
+    const attachment = task.attachments.id(attachmentId);
+    if (!attachment) {
+      return res.status(404).json({ message: 'Attachment not found' });
+    }
+    // If using local storage, get file path from attachment.url
+    // For local uploads, attachment.url is like /uploads/filename.ext
+    if (attachment.url && attachment.url.startsWith('/uploads/')) {
+      const absolutePath = path.resolve(process.cwd(), attachment.url.substring(1));
+      console.log('Attempting to download from path:', absolutePath);
+
+      res.setHeader('Content-Disposition', `attachment; filename="${attachment.filename}"`);
+      res.setHeader('Content-Type', attachment.mimetype || 'application/octet-stream');
+      return res.sendFile(absolutePath, (err) => {
+        if (err) {
+          console.error('Error sending file:', err);
+          return res.status(404).json({ message: 'File not found' });
+        }
+      });
+    } else if (attachment.url) {
+      // If url is external (e.g., cloudinary), redirect to download
+      return res.redirect(attachment.url);
+    } else {
+      return res.status(404).json({ message: 'File not found' });
+    }
+  } catch (error) {
+    console.error('Error downloading task attachment:', error);
+    res.status(500).json({ message: 'Failed to download attachment' });
+  }
+};
 import Task from '../models/task.model.js';
 import User from '../models/user.model.js';
 import Memo from '../models/memo.model.js';
@@ -32,8 +72,7 @@ export const createTask = async (req, res) => {
       priority,
       assignedTo,
       status,
-      category,
-      recurrence
+      category
     } = req.body;
 
     // Normalize and validate assignedTo
@@ -55,8 +94,7 @@ export const createTask = async (req, res) => {
       priority,
       assignedTo: assignedToArray,
       status,
-      category,
-      recurrence
+      category
     });
 
     // Check if we have a valid user ID
@@ -79,8 +117,7 @@ export const createTask = async (req, res) => {
       assignedTo: assignedToArray,
       createdBy: req.user._id,
       status: status || 'todo',
-      category,
-      recurrence
+      category
     };
 
     console.log('Task data before creation:', taskData);
@@ -487,13 +524,11 @@ export const uploadTaskAttachment = async (req, res) => {
       return res.status(404).json({ message: 'Task not found' });
     }
 
-    // Use cloudinary or similar service to upload the file
-    // For this example, we'll simulate a successful upload
     const attachmentData = {
       filename: file.originalname,
       mimetype: file.mimetype,
       size: file.size,
-      url: `https://example.com/files/${Date.now()}-${file.originalname}`, // Placeholder URL
+      url: '/uploads/' + file.filename, // Correctly point to the uploaded file
       uploadedBy: req.user._id,
       uploadedAt: new Date()
     };

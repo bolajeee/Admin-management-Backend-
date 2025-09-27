@@ -96,6 +96,10 @@ app.use(cors({
   exposedHeaders: ['set-cookie']
 }));
 
+// Serve static files from uploads directory for previews
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 // Routes
 app.use("/api/auth", authRoute);
 app.use("/api/users/settings", settingsRoute);
@@ -108,6 +112,7 @@ app.use("/api/reports", reportRoute);
 app.use("/api/roles", roleRoute);
 app.use("/api/teams", teamRoute);
 app.use("/api/audit", auditRoute);
+app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
 // Socket.IO connection handling
 io.on('connection', (socket) => {
@@ -160,9 +165,6 @@ io.on('connection', (socket) => {
   });
 });
 
-// Get the directory name using ES modules
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 // Create uploads directory if it doesn't exist
 const uploadsDir = path.join(__dirname, '../uploads/reports');
