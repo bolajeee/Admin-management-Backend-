@@ -39,9 +39,11 @@ const io = new Server(server, {
     origin: function(origin, callback) {
       if (!origin) return callback(null, true);
       
-      if origin.startsWith('http://localhost:') {
+      if (origin.startsWith('http://localhost:')) {
         return callback(null, true);
       }
+
+      
       
       
       callback(new Error('Not allowed by CORS'));
