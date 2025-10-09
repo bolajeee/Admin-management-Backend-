@@ -40,9 +40,12 @@ const io = new Server(server, {
       if (!origin) return callback(null, true);
       
       if (origin.startsWith('http://localhost:') || 
-          origin === process.env.FRONTEND_URL) {
+          origin === process.env.FRONTEND_URL ||
+          origin === 'https://admin-management-backend.vercel.app' ||
+          origin === 'https://vercel.com/ibrahimoibrahim1999yahoocoms-projects/admin-management-backend/9L9jB37f83jLEwJ9RdsxEk5ocDvo') {
         return callback(null, true);
       }
+      
       
       callback(new Error('Not allowed by CORS'));
     },
@@ -63,6 +66,8 @@ const allowedOrigins = [
   'http://localhost:5173',  // Default Vite port
   'http://127.0.0.1:3000', // Alternative localhost
   'http://127.0.0.1:5173', // Alternative Vite localhost
+  'https://admin-management-backend.vercel.app',
+  'https://vercel.com/ibrahimoibrahim1999yahoocoms-projects/admin-management-backend/9L9jB37f83jLEwJ9RdsxEk5ocDvo'
 ];
 
 // Add FRONTEND_URL from environment if it exists
