@@ -35,19 +35,7 @@ const server = createServer(app);
 // Set up Socket.IO
 const io = new Server(server, {
   cors: {
-    // More flexible CORS for Socket.IO
-    origin: function(origin, callback) {
-      if (!origin) return callback(null, true);
-      
-      if (origin.startsWith('http://localhost:')) {
-        return callback(null, true);
-      }
-
-      
-      
-      
-      callback(new Error('Not allowed by CORS'));
-    },
+    origin: '*',
     credentials: true
   }
 });
@@ -65,8 +53,7 @@ const allowedOrigins = [
   'http://localhost:5173',  // Default Vite port
   'http://127.0.0.1:3000', // Alternative localhost
   'http://127.0.0.1:5173', // Alternative Vite localhost
-  'https://admin-management-backend.vercel.app',
-  'https://vercel.com/ibrahimoibrahim1999yahoocoms-projects/admin-management-backend/9L9jB37f83jLEwJ9RdsxEk5ocDvo'
+  'https://admin-management-frontend.vercel.app',
 ];
 
 // Add FRONTEND_URL from environment if it exists
@@ -77,23 +64,7 @@ if (process.env.FRONTEND_URL) {
 // console.log('Allowed CORS origins:', allowedOrigins);
 
 app.use(cors({
-  origin: function(origin, callback) {
-    // Allow requests with no origin (like mobile apps, curl requests)
-    if (!origin) {
-      console.log('No origin header present');
-      return callback(null, true);
-    }
-    
-    // Check if the origin is allowed
-    if (allowedOrigins.includes(origin)) {
-      // console.log('Allowed origin:', origin);
-      return callback(null, true);
-    }
-    
-    // For debugging, log the blocked origin
-    console.log('Blocked by CORS:', origin);
-    callback(new Error('Not allowed by CORS'));
-  },
+  origin: '*',
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
