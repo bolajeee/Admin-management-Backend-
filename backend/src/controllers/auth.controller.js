@@ -113,10 +113,8 @@ export const signupUser = async (req, res) => {
 
 export const loginUser = async (req, res) => {
     try {
-        console.log('loginUser: req.body', req.body);
         const validation = AuthValidation.validateLogin(req.body);
         if (!validation.isValid) {
-            console.log('loginUser: validation errors', validation.errors);
             return validationError(res, validation.errors);
         }
 
@@ -124,24 +122,21 @@ export const loginUser = async (req, res) => {
         const user = await User.findOne({ email });
 
         if (!user) {
-            console.log('loginUser: user not found');
             return errorResponse(res, null, 'Invalid email or password', 400);
         }
 
         const isPasswordCorrect = await AuthService.comparePasswords(password, user.password);
         if (!isPasswordCorrect) {
-            console.log('loginUser: invalid password');
             return errorResponse(res, null, 'Invalid email or password', 400);
         }
 
-        generateToken(user._id, res);
+        const token = generateToken(user._id);
         await AuditService.createAuditLog({
             user: user._id,
             action: 'user_login',
         });
-        return successResponse(res, AuthService.generateAuthResponse(user), 'Login successful');
+        return successResponse(res, { ...AuthService.generateAuthResponse(user), token }, 'Login successful');
     } catch (error) {
-        console.error('loginUser: error', error);
         return errorResponse(res, error, 'Error during login');
     }
 }
