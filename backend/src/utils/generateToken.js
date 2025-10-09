@@ -11,7 +11,7 @@ export const generateToken = (userId, res) => {
     res.cookie("token", token, {
         httpOnly: true, // prevents client-side JS (xxs attack) from accessing the cookie
         secure: process.env.NODE_ENV !== "development", // prevents cookie from being sent over http
-        sameSite: "strict", // prevents CSRF attacks
+        sameSite: "None", // allows cross-origin requests
         maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
     });
     return token;
