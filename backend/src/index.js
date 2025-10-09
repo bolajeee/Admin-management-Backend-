@@ -39,10 +39,7 @@ const io = new Server(server, {
     origin: function(origin, callback) {
       if (!origin) return callback(null, true);
       
-      if (origin.startsWith('http://localhost:') || 
-          origin === process.env.FRONTEND_URL ||
-          origin === 'https://admin-management-backend.vercel.app/api' ||
-          origin === 'https://vercel.com/ibrahimoibrahim1999yahoocoms-projects/admin-management-backend/9L9jB37f83jLEwJ9RdsxEk5ocDvo') {
+      if origin.startsWith('http://localhost:') {
         return callback(null, true);
       }
       
