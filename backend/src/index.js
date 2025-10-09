@@ -41,7 +41,7 @@ const io = new Server(server, {
       
       if (origin.startsWith('http://localhost:') || 
           origin === process.env.FRONTEND_URL ||
-          origin === 'https://admin-management-backend.vercel.app' ||
+          origin === 'https://admin-management-backend.vercel.app/api' ||
           origin === 'https://vercel.com/ibrahimoibrahim1999yahoocoms-projects/admin-management-backend/9L9jB37f83jLEwJ9RdsxEk5ocDvo') {
         return callback(null, true);
       }
