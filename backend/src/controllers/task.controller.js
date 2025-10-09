@@ -7,46 +7,45 @@ export const downloadTaskAttachment = async (req, res) => {
     const { taskId, attachmentId } = req.params;
     const task = await Task.findById(taskId);
     if (!task) {
-      return res.status(404).json({ message: 'Task not found' });
+      return errorResponse(res, null, 'Task not found', 404);
     }
     const attachment = task.attachments.id(attachmentId);
     if (!attachment) {
-      return res.status(404).json({ message: 'Attachment not found' });
+      return errorResponse(res, null, 'Attachment not found', 404);
     }
     // If using local storage, get file path from attachment.url
     // For local uploads, attachment.url is like /uploads/filename.ext
     if (attachment.url && attachment.url.startsWith('/uploads/')) {
       const absolutePath = path.resolve(process.cwd(), attachment.url.substring(1));
-      console.log('Attempting to download from path:', absolutePath);
 
       res.setHeader('Content-Disposition', `attachment; filename="${attachment.filename}"`);
       res.setHeader('Content-Type', attachment.mimetype || 'application/octet-stream');
       return res.sendFile(absolutePath, (err) => {
         if (err) {
-          console.error('Error sending file:', err);
-          return res.status(404).json({ message: 'File not found' });
+          return errorResponse(res, err, 'File not found', 404);
         }
       });
     } else if (attachment.url) {
       // If url is external (e.g., cloudinary), redirect to download
       return res.redirect(attachment.url);
     } else {
-      return res.status(404).json({ message: 'File not found' });
+      return errorResponse(res, null, 'File not found', 404);
     }
   } catch (error) {
-    console.error('Error downloading task attachment:', error);
-    res.status(500).json({ message: 'Failed to download attachment' });
+    return errorResponse(res, error, 'Failed to download attachment');
   }
 };
 import Task from '../models/task.model.js';
 import User from '../models/user.model.js';
 import Memo from '../models/memo.model.js';
+import Audit from '../models/audit.model.js';
 import { successResponse, errorResponse, validationError } from '../utils/responseHandler.js';
 import { queryBuilder, populateFields } from '../utils/queryUtils.js';
 import ValidationUtils from '../utils/validationUtils.js';
 import NotificationService from '../services/notification.service.js';
 import AuditService from '../services/audit.service.js';
 import mongoose from 'mongoose';
+import FileService from '../services/file.service.js';
 
 /**
  * Create a new task
@@ -55,13 +54,8 @@ import { debugLog, handleServerError } from '../utils/debugUtils.js';
 
 export const createTask = async (req, res) => {
   try {
-    debugLog('Request body', req.body);
-    debugLog('User info', req.user);
-
-    // Validate request data
     const validation = ValidationUtils.taskValidation(req.body);
     if (!validation.isValid) {
-      debugLog('Validation failed', validation.errors);
       return validationError(res, validation.errors);
     }
 
@@ -75,7 +69,6 @@ export const createTask = async (req, res) => {
       category
     } = req.body;
 
-    // Normalize and validate assignedTo
     let assignedToArray = [];
     if (assignedTo) {
       assignedToArray = Array.isArray(assignedTo) ? assignedTo : [assignedTo];
@@ -85,28 +78,6 @@ export const createTask = async (req, res) => {
 
     if (!req.user?._id) {
       return errorResponse(res, null, 'Authentication required', 401);
-    }
-
-    console.log('Creating task with data:', {
-      title,
-      description,
-      dueDate,
-      priority,
-      assignedTo: assignedToArray,
-      status,
-      category
-    });
-
-    // Check if we have a valid user ID
-    if (!req.user?._id) {
-      console.error('Invalid user ID:', req.user);
-      return errorResponse(res, null, 'Invalid user ID', 400);
-    }
-
-    // Validate task data
-    if (!title) {
-      console.error('Title is required');
-      return errorResponse(res, null, 'Title is required', 400);
     }
 
     const taskData = {
@@ -120,9 +91,7 @@ export const createTask = async (req, res) => {
       category
     };
 
-    console.log('Task data before creation:', taskData);
     const task = new Task(taskData);
-
     const savedTask = await task.save();
 
     if (assignedToArray.length > 0) {
@@ -143,17 +112,6 @@ export const createTask = async (req, res) => {
 
     return successResponse(res, populatedTask, 'Task created successfully', 201);
   } catch (error) {
-    debugLog('Error in createTask', error);
-
-    if (error.name === 'ValidationError') {
-      const messages = Object.values(error.errors).map(val => val.message);
-      debugLog('Validation error messages', messages);
-      return res.status(400).json({
-        message: 'Validation error',
-        errors: messages
-      });
-    }
-
     return handleServerError(res, error, 'Failed to create task');
   }
 };
@@ -163,7 +121,6 @@ export const createTask = async (req, res) => {
  */
 export const getTasks = async (req, res) => {
   try {
-    console.log('[getTasks] Query parameters:', req.query);
     const { status, priority, assignee, category, search, page, limit, sortBy } = req.query;
 
     const queryOptions = queryBuilder({}, {
@@ -180,29 +137,18 @@ export const getTasks = async (req, res) => {
       sort: sortBy ? { [sortBy]: -1 } : { createdAt: -1 }
     });
 
-    console.log('[getTasks] Query options:', queryOptions);
-
     const tasks = await Task.find(queryOptions.query)
       .sort(queryOptions.sort)
       .skip(queryOptions.skip)
       .limit(queryOptions.limit);
 
-    console.log(`[getTasks] Found ${tasks.length} tasks`);
+    const populatedTasks = await populateFields(Task, tasks, {
+      assignedTo: { model: User, select: 'name email profilePicture' },
+      createdBy: { model: User, select: 'name email' }
+    });
 
-    try {
-      const populatedTasks = await populateFields(Task, tasks, {
-        assignedTo: { model: User, select: 'name email profilePicture' },
-        createdBy: { model: User, select: 'name email' }
-      });
-
-      return successResponse(res, populatedTasks, 'Tasks retrieved successfully');
-    } catch (populateError) {
-      console.error('[getTasks] Error populating fields:', populateError);
-      // Return unpopulated tasks if population fails
-      return successResponse(res, tasks, 'Tasks retrieved (without user details)');
-    }
+    return successResponse(res, populatedTasks, 'Tasks retrieved successfully');
   } catch (error) {
-    console.error('[getTasks] Error:', error);
     return errorResponse(res, error, 'Failed to fetch tasks');
   }
 };
@@ -215,10 +161,9 @@ export const getTasks = async (req, res) => {
 export const getTaskCount = async (req, res) => {
   try {
     const count = await Task.countDocuments();
-    res.status(200).json({ count });
+    return successResponse(res, { count }, 'Task count retrieved successfully');
   } catch (error) {
-    console.error('Error getting task count:', error);
-    res.status(500).json({ message: 'Failed to get task count' });
+    return errorResponse(res, error, 'Failed to get task count');
   }
 };
 
@@ -228,48 +173,13 @@ export const getTaskCount = async (req, res) => {
 // Fix getUserTasks to handle potential populate errors
 export const getUserTasks = async (req, res) => {
   try {
-    let tasks;
+    const tasks = await Task.find({ assignedTo: req.user.userId })
+      .populate('createdBy', 'name email profilePicture')
+      .sort({ createdAt: -1 });
 
-    try {
-      tasks = await Task.find({
-        assignedTo: req.user.userId
-      })
-        .populate('createdBy', 'name email profilePicture')
-        .sort({ createdAt: -1 });
-    } catch (populateError) {
-      // Fallback if populate fails
-      tasks = await Task.find({
-        assignedTo: req.user.userId
-      }).sort({ createdAt: -1 });
-
-      // Manually populate creator info
-      const creatorIds = [...new Set(
-        tasks.map(task => task.createdBy ? task.createdBy.toString() : null).filter(Boolean)
-      )];
-
-      const creators = await User.find({ _id: { $in: creatorIds } })
-        .select('_id name email profilePicture');
-
-      const creatorMap = {};
-      creators.forEach(creator => {
-        creatorMap[creator._id.toString()] = creator;
-      });
-
-      tasks = tasks.map(task => {
-        const taskObj = task.toObject();
-
-        if (taskObj.createdBy && creatorMap[taskObj.createdBy.toString()]) {
-          taskObj.createdBy = creatorMap[taskObj.createdBy.toString()];
-        }
-
-        return taskObj;
-      });
-    }
-
-    res.status(200).json(tasks);
+    return successResponse(res, tasks, 'User tasks retrieved successfully');
   } catch (error) {
-    console.error('Error fetching user tasks:', error);
-    res.status(500).json({ message: 'Failed to fetch user tasks' });
+    return errorResponse(res, error, 'Failed to fetch user tasks');
   }
 };
 
@@ -285,13 +195,12 @@ export const getTaskById = async (req, res) => {
       .populate('createdBy', 'name email profilePicture');
 
     if (!task) {
-      return res.status(404).json({ message: 'Task not found' });
+      return errorResponse(res, null, 'Task not found', 404);
     }
 
-    res.status(200).json(task);
+    return successResponse(res, task, 'Task retrieved successfully');
   } catch (error) {
-    console.error('Error fetching task:', error);
-    res.status(500).json({ message: 'Failed to fetch task' });
+    return errorResponse(res, error, 'Failed to fetch task');
   }
 };
 
@@ -368,8 +277,7 @@ export const updateTask = async (req, res) => {
 
     return successResponse(res, populatedTask, 'Task updated successfully');
   } catch (error) {
-    console.error('Error updating task:', error);
-    res.status(500).json({ message: 'Failed to update task' });
+    return errorResponse(res, error, 'Failed to update task');
   }
 };
 
@@ -381,7 +289,7 @@ export const deleteTask = async (req, res) => {
     const task = await Task.findById(req.params.taskId);
 
     if (!task) {
-      return res.status(404).json({ message: 'Task not found' });
+      return errorResponse(res, null, 'Task not found', 404);
     }
 
     // Check if user can delete this task (admin or creator)
@@ -389,7 +297,7 @@ export const deleteTask = async (req, res) => {
     const isCreator = task.createdBy.toString() === req.user.userId;
 
     if (!isAdmin && !isCreator) {
-      return res.status(403).json({ message: 'Not authorized to delete this task' });
+      return errorResponse(res, null, 'Not authorized to delete this task', 403);
     }
 
     await Task.findByIdAndDelete(req.params.taskId);
@@ -411,10 +319,9 @@ export const deleteTask = async (req, res) => {
         details: { taskId: task._id, title: task.title }
     });
 
-    res.status(200).json({ message: 'Task deleted successfully' });
+    return successResponse(res, null, 'Task deleted successfully');
   } catch (error) {
-    console.error('Error deleting task:', error);
-    res.status(500).json({ message: 'Failed to delete task' });
+    return errorResponse(res, error, 'Failed to delete task');
   }
 };
 
@@ -425,21 +332,16 @@ export const debugTaskSchema = async (req, res) => {
     const task = await Task.findOne();
 
     if (!task) {
-      return res.status(404).json({ message: 'No tasks found' });
+      return errorResponse(res, null, 'No tasks found', 404);
     }
 
-    // Log the structure
-    console.log('Task document structure:', Object.keys(task.toObject()));
-    console.log('Task schema paths:', Object.keys(Task.schema.paths));
-
-    res.status(200).json({
+    return successResponse(res, {
       message: 'Task schema logged to console',
       documentStructure: Object.keys(task.toObject()),
       schemaPaths: Object.keys(Task.schema.paths)
-    });
+    }, 'Task schema retrieved successfully');
   } catch (error) {
-    console.error('Error debugging task schema:', error);
-    res.status(500).json({ message: 'Error debugging task schema' });
+    return errorResponse(res, error, 'Error debugging task schema');
   }
 };
 
@@ -450,12 +352,12 @@ export const addTaskComment = async (req, res) => {
     const { comment } = req.body;
 
     if (!comment) {
-      return res.status(400).json({ message: 'Comment text is required' });
+      return errorResponse(res, null, 'Comment text is required', 400);
     }
 
     const task = await Task.findById(taskId);
     if (!task) {
-      return res.status(404).json({ message: 'Task not found' });
+      return errorResponse(res, null, 'Task not found', 404);
     }
 
     // Initialize comments array if it doesn't exist
@@ -480,10 +382,9 @@ export const addTaskComment = async (req, res) => {
       });
 
     const newComment = updatedTask.comments[updatedTask.comments.length - 1];
-    res.status(201).json(newComment);
+    return successResponse(res, newComment, 'Comment added successfully', 201);
   } catch (error) {
-    console.error('Error adding comment to task:', error);
-    res.status(500).json({ message: 'Failed to add comment' });
+    return errorResponse(res, error, 'Failed to add comment');
   }
 };
 
@@ -499,13 +400,12 @@ export const getTaskComments = async (req, res) => {
       });
 
     if (!task) {
-      return res.status(404).json({ message: 'Task not found' });
+      return errorResponse(res, null, 'Task not found', 404);
     }
 
-    res.status(200).json(task.comments || []);
+    return successResponse(res, task.comments || [], 'Comments retrieved successfully');
   } catch (error) {
-    console.error('Error fetching task comments:', error);
-    res.status(500).json({ message: 'Failed to fetch comments' });
+    return errorResponse(res, error, 'Failed to fetch comments');
   }
 };
 
@@ -516,24 +416,26 @@ export const uploadTaskAttachment = async (req, res) => {
     const file = req.file;
 
     if (!file) {
-      return res.status(400).json({ message: 'No file uploaded' });
+      return errorResponse(res, null, 'No file uploaded', 400);
     }
 
     const task = await Task.findById(taskId);
     if (!task) {
-      return res.status(404).json({ message: 'Task not found' });
+      return errorResponse(res, null, 'Task not found', 404);
     }
+
+    const dataURI = FileService.getDataURI(file);
+    const cldRes = await FileService.handleUpload(dataURI);
 
     const attachmentData = {
       filename: file.originalname,
       mimetype: file.mimetype,
       size: file.size,
-      url: '/uploads/' + file.filename, // Correctly point to the uploaded file
+      url: cldRes.secure_url,
       uploadedBy: req.user._id,
       uploadedAt: new Date()
     };
 
-    // Initialize attachments array if it doesn't exist
     if (!task.attachments) {
       task.attachments = [];
     }
@@ -541,10 +443,9 @@ export const uploadTaskAttachment = async (req, res) => {
     task.attachments.push(attachmentData);
     await task.save();
 
-    res.status(201).json(attachmentData);
+    return successResponse(res, attachmentData, 'Attachment uploaded successfully', 201);
   } catch (error) {
-    console.error('Error uploading task attachment:', error);
-    res.status(500).json({ message: 'Failed to upload attachment' });
+    return errorResponse(res, error, 'Failed to upload attachment');
   }
 };
 
@@ -560,13 +461,12 @@ export const listTaskAttachments = async (req, res) => {
       });
 
     if (!task) {
-      return res.status(404).json({ message: 'Task not found' });
+      return errorResponse(res, null, 'Task not found', 404);
     }
 
-    res.status(200).json(task.attachments || []);
+    return successResponse(res, task.attachments || [], 'Attachments retrieved successfully');
   } catch (error) {
-    console.error('Error fetching task attachments:', error);
-    res.status(500).json({ message: 'Failed to fetch attachments' });
+    return errorResponse(res, error, 'Failed to fetch attachments');
   }
 };
 
@@ -577,17 +477,17 @@ export const deleteTaskAttachment = async (req, res) => {
 
     const task = await Task.findById(taskId);
     if (!task) {
-      return res.status(404).json({ message: 'Task not found' });
+      return errorResponse(res, null, 'Task not found', 404);
     }
 
     // Find and remove the attachment
     if (!task.attachments) {
-      return res.status(404).json({ message: 'No attachments found' });
+      return errorResponse(res, null, 'No attachments found', 404);
     }
 
     const attachmentIndex = task.attachments.findIndex(a => a._id.toString() === attachmentId);
     if (attachmentIndex === -1) {
-      return res.status(404).json({ message: 'Attachment not found' });
+      return errorResponse(res, null, 'Attachment not found', 404);
     }
 
     // Remove the attachment from storage (if using a service like cloudinary)
@@ -597,10 +497,9 @@ export const deleteTaskAttachment = async (req, res) => {
     task.attachments.splice(attachmentIndex, 1);
     await task.save();
 
-    res.status(200).json({ message: 'Attachment deleted successfully' });
+    return successResponse(res, null, 'Attachment deleted successfully');
   } catch (error) {
-    console.error('Error deleting task attachment:', error);
-    res.status(500).json({ message: 'Failed to delete attachment' });
+    return errorResponse(res, error, 'Failed to delete attachment');
   }
 };
 
@@ -611,13 +510,13 @@ export const linkMemoToTask = async (req, res) => {
 
     const task = await Task.findById(taskId);
     if (!task) {
-      return res.status(404).json({ message: 'Task not found' });
+      return errorResponse(res, null, 'Task not found', 404);
     }
 
     // Check if memo exists
     const memoExists = await Memo.findById(memoId);
     if (!memoExists) {
-      return res.status(404).json({ message: 'Memo not found' });
+      return errorResponse(res, null, 'Memo not found', 404);
     }
 
     // Initialize linkedMemos array if it doesn't exist
@@ -627,17 +526,16 @@ export const linkMemoToTask = async (req, res) => {
 
     // Check if already linked
     if (task.linkedMemos.includes(memoId)) {
-      return res.status(400).json({ message: 'Memo already linked to this task' });
+      return errorResponse(res, null, 'Memo already linked to this task', 400);
     }
 
     // Link memo
     task.linkedMemos.push(memoId);
     await task.save();
 
-    res.status(200).json({ message: 'Memo linked successfully' });
+    return successResponse(res, null, 'Memo linked successfully');
   } catch (error) {
-    console.error('Error linking memo to task:', error);
-    res.status(500).json({ message: 'Failed to link memo' });
+    return errorResponse(res, error, 'Failed to link memo');
   }
 };
 
@@ -648,22 +546,21 @@ export const unlinkMemoFromTask = async (req, res) => {
 
     const task = await Task.findById(taskId);
     if (!task) {
-      return res.status(404).json({ message: 'Task not found' });
+      return errorResponse(res, null, 'Task not found', 404);
     }
 
     // Check if task has linked memos
     if (!task.linkedMemos || !task.linkedMemos.length) {
-      return res.status(400).json({ message: 'No linked memos found' });
+      return errorResponse(res, null, 'No linked memos found', 400);
     }
 
     // Remove memo from linkedMemos
     task.linkedMemos = task.linkedMemos.filter(id => id.toString() !== memoId);
     await task.save();
 
-    res.status(200).json({ message: 'Memo unlinked successfully' });
+    return successResponse(res, null, 'Memo unlinked successfully');
   } catch (error) {
-    console.error('Error unlinking memo from task:', error);
-    res.status(500).json({ message: 'Failed to unlink memo' });
+    return errorResponse(res, error, 'Failed to unlink memo');
   }
 };
 
@@ -674,18 +571,18 @@ export const delegateTask = async (req, res) => {
     const { assignee } = req.body;
 
     if (!assignee) {
-      return res.status(400).json({ message: 'Assignee ID is required' });
+      return errorResponse(res, null, 'Assignee ID is required', 400);
     }
 
     const task = await Task.findById(taskId);
     if (!task) {
-      return res.status(404).json({ message: 'Task not found' });
+      return errorResponse(res, null, 'Task not found', 404);
     }
 
     // Check if user exists
     const user = await User.findById(assignee);
     if (!user) {
-      return res.status(404).json({ message: 'User not found' });
+      return errorResponse(res, null, 'User not found', 404);
     }
 
     // Update task assignee
@@ -708,10 +605,9 @@ export const delegateTask = async (req, res) => {
       });
     }
 
-    res.status(200).json(updatedTask);
+    return successResponse(res, updatedTask, 'Task delegated successfully');
   } catch (error) {
-    console.error('Error delegating task:', error);
-    res.status(500).json({ message: 'Failed to delegate task' });
+    return errorResponse(res, error, 'Failed to delegate task');
   }
 };
 
@@ -761,10 +657,9 @@ export const searchTasks = async (req, res) => {
       .populate('createdBy', 'name email profilePicture')
       .sort({ createdAt: -1 });
 
-    res.status(200).json(tasks);
+    return successResponse(res, tasks, 'Tasks retrieved successfully');
   } catch (error) {
-    console.error('Error searching tasks:', error);
-    res.status(500).json({ message: 'Failed to search tasks' });
+    return errorResponse(res, error, 'Failed to search tasks');
   }
 };
 
@@ -775,52 +670,16 @@ export const getTaskAuditLog = async (req, res) => {
 
     const task = await Task.findById(taskId);
     if (!task) {
-      return res.status(404).json({ message: 'Task not found' });
+      return errorResponse(res, null, 'Task not found', 404);
     }
 
-    // For a real implementation, you would have a separate TaskAudit model
-    // This is a simplified example that returns placeholder data
-    const auditLog = [
-      {
-        action: 'created',
-        timestamp: task.createdAt,
-        user: task.createdBy,
-        details: `Task created with title "${task.title}"`
-      }
-    ];
+    const auditLog = await Audit.find({ 'details.taskId': taskId })
+      .populate('user', 'name email profilePicture')
+      .sort({ timestamp: -1 });
 
-    // If task has been updated
-    if (task.updatedAt > task.createdAt) {
-      auditLog.push({
-        action: 'updated',
-        timestamp: task.updatedAt,
-        user: task.updatedBy || task.createdBy,
-        details: 'Task details updated'
-      });
-    }
-
-    // Sort by timestamp (newest first)
-    auditLog.sort((a, b) => b.timestamp - a.timestamp);
-
-    // Populate user details
-    const userIds = auditLog.map(entry => entry.user);
-    const users = await User.find({ _id: { $in: userIds } })
-      .select('name email profilePicture');
-
-    const userMap = {};
-    users.forEach(user => {
-      userMap[user._id.toString()] = user;
-    });
-
-    const populatedAuditLog = auditLog.map(entry => ({
-      ...entry,
-      user: userMap[entry.user.toString()]
-    }));
-
-    res.status(200).json(populatedAuditLog);
+    return successResponse(res, auditLog, 'Audit log retrieved successfully');
   } catch (error) {
-    console.error('Error fetching task audit log:', error);
-    res.status(500).json({ message: 'Failed to fetch audit log' });
+    return errorResponse(res, error, 'Failed to fetch audit log');
   }
 };
 
@@ -864,9 +723,8 @@ export const getTasksCompletedOverTime = async (req, res) => {
       result.push({ date: dateStr, count: found ? found.count : 0 });
     }
 
-    res.json({ success: true, data: result });
+    return successResponse(res, result, 'Tasks completed over time retrieved successfully');
   } catch (error) {
-    console.error('Error getting tasks completed over time:', error);
-    res.status(500).json({ message: 'Failed to get tasks completed analytics' });
+    return errorResponse(res, error, 'Failed to get tasks completed analytics');
   }
 };

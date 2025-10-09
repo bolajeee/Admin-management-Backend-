@@ -6,7 +6,7 @@ import exceljs from 'exceljs';
 import csv from 'csv-parser';
 import { createReadStream } from 'fs';
 import { NotFoundError } from '../utils/errors.js';
-import { successResponse } from '../utils/responseHandler.js';
+import { successResponse, errorResponse } from '../utils/responseHandler.js';
 
 /**
  * Upload and process report data
@@ -14,7 +14,7 @@ import { successResponse } from '../utils/responseHandler.js';
 export const uploadReportData = async (req, res) => {
   try {
     if (!req.file) {
-      return res.status(400).json({ message: 'No file uploaded' });
+      return errorResponse(res, null, 'No file uploaded', 400);
     }
 
     const filePath = req.file.path;
@@ -32,14 +32,10 @@ export const uploadReportData = async (req, res) => {
       } else if (fileType === '.xlsx' || fileType === '.xls') {
         data = await parseExcel(filePath);
       } else {
-        return res.status(400).json({ message: 'Unsupported file type' });
+        return errorResponse(res, null, 'Unsupported file type', 400);
       }
     } catch (fileError) {
-      console.error('Error processing file:', fileError);
-      return res.status(400).json({
-        message: 'Error processing file',
-        error: fileError.message
-      });
+      return errorResponse(res, fileError, 'Error processing file', 400);
     }
 
     // Create new report record in database
@@ -55,8 +51,7 @@ export const uploadReportData = async (req, res) => {
 
     await report.save();
 
-    res.status(201).json({
-      message: 'Report data uploaded successfully',
+    return successResponse(res, {
       report: {
         id: report._id,
         name: report.name,
@@ -64,14 +59,10 @@ export const uploadReportData = async (req, res) => {
         columns: report.columns,
         rowCount: data.length,
       }
-    });
+    }, 'Report data uploaded successfully', 201);
     
   } catch (error) {
-    console.error('Error uploading report data:', error);
-    res.status(500).json({
-      message: 'Failed to upload report data',
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
-    });
+    return errorResponse(res, error, 'Failed to upload report data');
   }
 };
 
@@ -138,10 +129,9 @@ export const getUploadedReports = async (req, res) => {
       .populate('uploadedBy', 'name email')
       .sort('-createdAt');
     
-    res.status(200).json(reports);
+    return successResponse(res, reports, 'Reports retrieved successfully');
   } catch (error) {
-    console.error('Error fetching uploaded reports:', error);
-    res.status(500).json({ message: 'Failed to fetch reports' });
+    return errorResponse(res, error, 'Failed to fetch reports');
   }
 };
 
@@ -153,7 +143,7 @@ export const getReportData = async (req, res) => {
     const report = await Report.findById(req.params.reportId);
     
     if (!report) {
-      return res.status(404).json({ message: 'Report not found' });
+      return errorResponse(res, null, 'Report not found', 404);
     }
     
     // Apply filtering, pagination if needed
@@ -186,7 +176,7 @@ export const getReportData = async (req, res) => {
     const endIndex = page * limit;
     const paginatedData = filteredData.slice(startIndex, endIndex);
     
-    res.status(200).json({
+    return successResponse(res, {
       report: {
         id: report._id,
         name: report.name,
@@ -201,11 +191,10 @@ export const getReportData = async (req, res) => {
         limit: parseInt(limit),
         totalPages: Math.ceil(filteredData.length / limit)
       }
-    });
+    }, 'Report data retrieved successfully');
     
   } catch (error) {
-    console.error('Error fetching report data:', error);
-    res.status(500).json({ message: 'Failed to fetch report data' });
+    return errorResponse(res, error, 'Failed to fetch report data');
   }
 };
 
@@ -217,13 +206,13 @@ export const exportReport = async (req, res) => {
     const { reportId, format = 'csv' } = req.query;
     
     if (!reportId) {
-      return res.status(400).json({ message: 'Report ID is required' });
+      return errorResponse(res, null, 'Report ID is required', 400);
     }
     
     const report = await Report.findById(reportId);
     
     if (!report) {
-      return res.status(404).json({ message: 'Report not found' });
+      return errorResponse(res, null, 'Report not found', 404);
     }
     
     if (format === 'csv') {
@@ -264,12 +253,11 @@ export const exportReport = async (req, res) => {
       await workbook.xlsx.write(res);
       return res.end();
     } else {
-      return res.status(400).json({ message: 'Unsupported export format' });
+      return errorResponse(res, null, 'Unsupported export format', 400);
     }
     
   } catch (error) {
-    console.error('Error exporting report:', error);
-    res.status(500).json({ message: 'Failed to export report' });
+    return errorResponse(res, error, 'Failed to export report');
   }
 };
 
@@ -289,7 +277,6 @@ export const deleteUploadedReport = async (req, res, next) => {
         await fs.unlink(report.filePath);
       } catch (err) {
         // File may not exist, log but continue
-        console.warn('File not found or already deleted:', report.filePath);
       }
     }
     // Remove from DB
@@ -297,6 +284,6 @@ export const deleteUploadedReport = async (req, res, next) => {
     
     successResponse(res, null, 'Report deleted successfully');
   } catch (error) {
-    next(error);
+    errorResponse(res, error, 'Failed to delete report');
   }
 };

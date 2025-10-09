@@ -25,7 +25,7 @@ const upload = multer({
   },
 });
 
-router.post("/signup", sanitizeInput, signupUser);
+router.post("/signup", sanitizeInput, protectRoute, authorize(['admin']), signupUser);
 router.post("/login", sanitizeInput, trackLoginFailure, loginUser, trackLogin);
 router.post("/logout", logoutUser);
 router.post("/forgot-password", sanitizeInput, forgotPassword);
@@ -38,7 +38,7 @@ router.post("/changePassword", sanitizeInput, protectRoute, changePassword);
 
 router.put("/updateProfile", sanitizeInput, protectRoute, upload.single('profilePic'), updateProfile);
 router.get("/check", protectRoute, checkAuthStatus);
-router.delete("/deleteUser/:id", sanitizeInput, protectRoute, authorize(['admin']), deleteUser);
+
 router.post("/create", sanitizeInput, protectRoute, authorize(['admin']), createUser);
 
 

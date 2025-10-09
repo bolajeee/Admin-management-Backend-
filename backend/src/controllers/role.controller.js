@@ -6,7 +6,7 @@ export const createRole = async (req, res, next) => {
     const role = await RoleService.createRole(req.body);
     successResponse(res, role, 'Role created successfully', 201);
   } catch (error) {
-    next(error);
+    errorResponse(res, error, 'Failed to create role');
   }
 };
 
@@ -15,7 +15,7 @@ export const getRoles = async (req, res, next) => {
     const roles = await RoleService.getRoles();
     successResponse(res, roles, 'Roles retrieved successfully');
   } catch (error) {
-    next(error);
+    errorResponse(res, error, 'Failed to retrieve roles');
   }
 };
 
@@ -27,7 +27,7 @@ export const getRoleById = async (req, res, next) => {
     }
     successResponse(res, role, 'Role retrieved successfully');
   } catch (error) {
-    next(error);
+    errorResponse(res, error, 'Failed to retrieve role');
   }
 };
 
@@ -39,7 +39,7 @@ export const updateRole = async (req, res, next) => {
     }
     successResponse(res, role, 'Role updated successfully');
   } catch (error) {
-    next(error);
+    errorResponse(res, error, 'Failed to update role');
   }
 };
 
@@ -51,7 +51,7 @@ export const deleteRole = async (req, res, next) => {
     }
     successResponse(res, null, 'Role deleted successfully');
   } catch (error) {
-    next(error);
+    errorResponse(res, error, 'Failed to delete role');
   }
 };
 
@@ -64,7 +64,7 @@ export const assignPermissionToRole = async (req, res, next) => {
     }
     successResponse(res, role, 'Permission assigned successfully');
   } catch (error) {
-    next(error);
+    errorResponse(res, error, 'Failed to assign permission');
   }
 };
 
@@ -77,6 +77,6 @@ export const removePermissionFromRole = async (req, res, next) => {
     }
     successResponse(res, role, 'Permission removed successfully');
   } catch (error) {
-    next(error);
+    errorResponse(res, error, 'Failed to remove permission');
   }
 };

@@ -7,6 +7,7 @@ import { successResponse, errorResponse, validationError } from '../utils/respon
 import mongoose from 'mongoose';
 import { io } from '../index.js';
 import NotificationService from '../services/notification.service.js';
+import FileService from '../services/file.service.js';
 
 export const getUsers = async (req, res) => {
     try {
@@ -26,10 +27,9 @@ export const getUsers = async (req, res) => {
             isActive: user.isActive || false
         }));
 
-        return res.status(200).json(formattedUsers);
+        return successResponse(res, formattedUsers, 'Users retrieved successfully');
     } catch (error) {
-        console.error('Error in getUsers:', error);
-        return res.status(500).json({ message: 'Error retrieving users' });
+        return errorResponse(res, error, 'Error retrieving users');
     }
 }
 
@@ -105,7 +105,6 @@ export const getMessages = async (req, res) => {
             }
         }, 'Messages retrieved successfully');
     } catch (error) {
-        console.error('Get messages error:', error);
         return errorResponse(res, error, 'Error retrieving messages');
     }
 };
@@ -136,17 +135,10 @@ export const sendMessage = async (req, res) => {
         }
 
         let imageUrl;
-        if (req.file && req.file.path) {
-            try {
-                const uploadResponse = await cloudinary.uploader.upload(req.file.path, {
-                    resource_type: 'auto',
-                    folder: 'messages'
-                });
-                imageUrl = uploadResponse.secure_url;
-            } catch (uploadError) {
-                console.error('Cloudinary upload error:', uploadError);
-                return errorResponse(res, uploadError, 'Error uploading image', 500);
-            }
+        if (req.file) {
+            const dataURI = FileService.getDataURI(req.file);
+            const cldRes = await FileService.handleUpload(dataURI);
+            imageUrl = cldRes.secure_url;
         }
 
         const messageData = {
@@ -182,7 +174,6 @@ export const sendMessage = async (req, res) => {
             201
         );
     } catch (error) {
-        console.error('Send message error:', error);
         return errorResponse(res, error, 'Error sending message');
     }
 };
@@ -307,7 +298,6 @@ export const updateMessageNotificationPreferences = async (req, res) => {
             'Notification preferences updated successfully'
         );
     } catch (error) {
-        console.error('Error updating notification preferences:', error);
         return errorResponse(res, error, 'Error updating notification preferences');
     }
 };

@@ -6,6 +6,6 @@ export const getAuditLogs = async (req, res, next) => {
     const { audits, pagination } = await AuditService.getAuditLogs(req.query);
     successResponse(res, audits, 'Audit logs retrieved successfully', 200, pagination);
   } catch (error) {
-    next(error);
+    errorResponse(res, error, 'Failed to retrieve audit logs');
   }
 };

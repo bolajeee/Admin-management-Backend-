@@ -4,6 +4,7 @@ import Message from '../models/message.model.js';
 import cloudinary from "../lib/cloudinary.js";
 import AuthService from '../services/auth.service.js';
 import AuditService from '../services/audit.service.js';
+import FileService from '../services/file.service.js';
 import { AuthValidation } from '../utils/authValidation.js';
 import ValidationUtils from '../utils/validationUtils.js';
 import { successResponse, errorResponse, validationError } from '../utils/responseHandler.js';
@@ -36,22 +37,21 @@ export const changePassword = async (req, res) => {
         const userId = req.user._id;
         const { currentPassword, newPassword } = req.body;
         if (!currentPassword || !newPassword) {
-            return res.status(400).json({ message: "Current and new password are required." });
+            return errorResponse(res, null, "Current and new password are required.", 400);
         }
         const user = await User.findById(userId);
         if (!user) {
-            return res.status(404).json({ message: "User not found." });
+            return errorResponse(res, null, "User not found.", 404);
         }
         const isMatch = await AuthService.comparePasswords(currentPassword, user.password);
         if (!isMatch) {
-            return res.status(400).json({ message: "Current password is incorrect." });
+            return errorResponse(res, null, "Current password is incorrect.", 400);
         }
         user.password = await AuthService.hashPassword(newPassword);
         await user.save();
-        return res.status(200).json({ message: "Password changed successfully." });
+        return successResponse(res, null, "Password changed successfully.");
     } catch (error) {
-        console.error("Error changing password:", error.message);
-        return res.status(500).json({ message: "Failed to change password." });
+        return errorResponse(res, error, "Failed to change password.");
     }
 };
 
@@ -150,32 +150,24 @@ export const logoutUser = (req, res) => {
     try {
         res.cookie("token", "", {
             maxAge: 0,
-        })
-        res.status(200).json({ message: "Logout successful" })
+        });
+        return successResponse(res, null, "Logout successful");
     } catch (error) {
-        console.error(`"error in logout controller." ${error.message}`)
-        res.status(500).json({ message: "Internal server error" })
+        return errorResponse(res, error, "Internal server error");
     }
-}
+};
 
 
 export const updateProfile = async (req, res) => {
-    async function handleUpload(file) {
-        return await cloudinary.uploader.upload(file, { resource_type: "auto" });
-    }
-
     try {
         const userId = req.user._id;
 
         if (!req.file) {
-            return res.status(400).json({ message: "Please upload a profile picture" });
+            return errorResponse(res, null, "Please upload a profile picture", 400);
         }
 
-        // Convert to base64 data URI
-        const b64 = Buffer.from(req.file.buffer).toString("base64");
-        const dataURI = `data:${req.file.mimetype};base64,${b64}`;
-
-        const cldRes = await handleUpload(dataURI);
+        const dataURI = FileService.getDataURI(req.file);
+        const cldRes = await FileService.handleUpload(dataURI);
 
         if (cldRes) {
             const updatedProfile = await User.findByIdAndUpdate(
@@ -184,26 +176,21 @@ export const updateProfile = async (req, res) => {
                 { new: true }
             );
 
-            return res.status(200).json({
-                message: "Profile updated successfully",
-                profilePicture: updatedProfile.profilePicture,
-            });
+            return successResponse(res, { profilePicture: updatedProfile.profilePicture }, "Profile updated successfully");
         }
     } catch (error) {
-        console.error("Error in updateProfile controller:", error.message);
-        res.status(500).json({ message: "Internal server error" });
+        return errorResponse(res, error, "Internal server error");
     }
 };
 
 export const checkAuthStatus = async (req, res) => {
     try {
         if (!req.user) {
-            return res.status(401).json({ message: "Unauthorized. Please login." });
+            return errorResponse(res, null, "Unauthorized. Please login.", 401);
         }
-        res.status(200).json(req.user);
+        return successResponse(res, req.user);
     } catch (error) {
-        console.error(`Error in checkAuthStatus: ${error.message}`);
-        res.status(500).json({ message: "Internal server error" });
+        return errorResponse(res, error, "Internal server error");
     }
 };
 
@@ -212,17 +199,16 @@ export const deleteUser = async (req, res) => {
         const { id } = req.params;
         const deletedUser = await User.findByIdAndDelete(id);
         if (!deletedUser) {
-            return res.status(404).json({ message: "User not found" });
+            return errorResponse(res, null, "User not found", 404);
         }
         await AuditService.createAuditLog({
             user: req.user._id,
             action: 'user_deleted',
             details: { userId: id, email: deletedUser.email }
         });
-        res.status(200).json({ message: "User deleted successfully" });
+        return successResponse(res, null, "User deleted successfully");
     } catch (error) {
-        console.error("Error deleting user:", error.message);
-        res.status(500).json({ error: "Internal server error" });
+        return errorResponse(res, error, "Internal server error");
     }
 };
 
@@ -262,10 +248,8 @@ export const toggleUserActive = async (req, res) => {
         const { id } = req.params;
         const user = await User.findById(id);
         if (!user) {
-            console.error(`[toggleUserActive] User not found for id: ${id}`);
-            return res.status(404).json({ message: 'User not found' });
+            return errorResponse(res, null, "User not found", 404);
         }
-        console.log(`[toggleUserActive] Found user:`, user);
         user.isActive = !user.isActive;
         await user.save();
         await AuditService.createAuditLog({
@@ -273,10 +257,9 @@ export const toggleUserActive = async (req, res) => {
             action: user.isActive ? 'user_activated' : 'user_deactivated',
             details: { userId: id, email: user.email }
         });
-        res.status(200).json({ message: `User ${user.isActive ? 'activated' : 'deactivated'} successfully`, isActive: user.isActive });
+        return successResponse(res, { isActive: user.isActive }, `User ${user.isActive ? 'activated' : 'deactivated'} successfully`);
     } catch (error) {
-        console.error(`[toggleUserActive] Error:`, error);
-        res.status(500).json({ message: 'Failed to update user status', error: error.message });
+        return errorResponse(res, error, "Failed to update user status");
     }
 };
 

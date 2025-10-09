@@ -28,7 +28,7 @@ export const getUserSettings = async (req, res, next) => {
 
     successResponse(res, settings, "User settings retrieved successfully");
   } catch (error) {
-    next(error);
+    errorResponse(res, error, "Failed to retrieve user settings");
   }
 };
 
@@ -79,7 +79,7 @@ export const updateUserSettings = async (req, res, next) => {
 
     successResponse(res, user.settings, "Settings updated successfully");
   } catch (error) {
-    next(error);
+    errorResponse(res, error, "Failed to update user settings");
   }
 };
 
@@ -93,7 +93,7 @@ export const getSystemSettings = async (req, res, next) => {
 
     successResponse(res, systemSettings.value, "System settings retrieved successfully");
   } catch (error) {
-    next(error);
+    errorResponse(res, error, "Failed to retrieve system settings");
   }
 };
 
@@ -135,6 +135,6 @@ export const updateSystemSettings = async (req, res, next) => {
 
     successResponse(res, systemSettings.value, "System settings updated successfully");
   } catch (error) {
-    next(error);
+    errorResponse(res, error, "Failed to update system settings");
   }
 };

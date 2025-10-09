@@ -88,7 +88,7 @@ export const createMemo = async (req, res, next) => {
 
         successResponse(res, populatedMemo, 'Memo created successfully', 201);
     } catch (error) {
-        next(error);
+        errorResponse(res, error, 'Failed to create memo');
     }
 };
 
@@ -102,7 +102,7 @@ export const getAllMemos = async (req, res, next) => {
         const { memos, pagination } = await MemoService.getMemos(req.query, req.user);
         successResponse(res, memos, 'Memos retrieved successfully', 200, pagination);
     } catch (error) {
-        next(error);
+        errorResponse(res, error, 'Failed to retrieve memos');
     }
 };
 
@@ -114,11 +114,6 @@ export const getAllMemos = async (req, res, next) => {
 export const createMemoForAllUsers = async (req, res, next) => {
     try {
         const { title, content, summary = '', severity = memoSeverity.LOW, deadline, expiresAt, metadata = {} } = req.body;
-
-        // Only admin can broadcast
-        if (req.user.role.name !== 'admin') {
-            return res.status(403).json({ message: 'Forbidden: Only admin can broadcast memos.' });
-        }
 
         // Get all user IDs
         const users = await User.find({}, '_id');
@@ -146,7 +141,7 @@ export const createMemoForAllUsers = async (req, res, next) => {
 
         successResponse(res, memo, 'Memo sent to all users', 201);
     } catch (error) {
-        next(error);
+        errorResponse(res, error, 'Failed to broadcast memo');
     }
 };
 
@@ -161,7 +156,7 @@ export const getMemosForUser = async (req, res, next) => {
         const { memos, pagination } = await MemoService.getMemos({ ...req.query, userId }, req.user);
         successResponse(res, memos, 'Memos retrieved successfully', 200, pagination);
     } catch (error) {
-        next(error);
+        errorResponse(res, error, 'Failed to retrieve memos for user');
     }
 };
 
@@ -175,7 +170,7 @@ export const getUserMemos = async (req, res, next) => {
         const { memos, pagination } = await MemoService.getMemos(req.query, req.user);
         successResponse(res, memos, 'Memos retrieved successfully', 200, pagination);
     } catch (error) {
-        next(error);
+        errorResponse(res, error, 'Failed to retrieve your memos');
     }
 };
 
@@ -203,7 +198,7 @@ export const getMemoById = async (req, res, next) => {
 
         successResponse(res, memo, 'Memo retrieved successfully');
     } catch (error) {
-        next(error);
+        errorResponse(res, error, 'Failed to retrieve memo');
     }
 };
 
@@ -243,7 +238,7 @@ export const markMemoAsRead = async (req, res, next) => {
 
         successResponse(res, null, 'Memo marked as read');
     } catch (error) {
-        next(error);
+        errorResponse(res, error, 'Failed to mark memo as read');
     }
 };
 
@@ -276,7 +271,7 @@ export const acknowledgeMemo = async (req, res, next) => {
 
         successResponse(res, null, 'Memo acknowledged successfully');
     } catch (error) {
-        next(error);
+        errorResponse(res, error, 'Failed to acknowledge memo');
     }
 };
 
@@ -302,7 +297,7 @@ export const snoozeMemo = async (req, res, next) => {
 
         successResponse(res, null, `Memo snoozed for ${durationMinutes} minutes`);
     } catch (error) {
-        next(error);
+        errorResponse(res, error, 'Failed to snooze memo');
     }
 };
 
@@ -377,7 +372,7 @@ export const updateMemo = async (req, res, next) => {
         });
         successResponse(res, populatedMemo, 'Memo updated successfully');
     } catch (error) {
-        next(error);
+        errorResponse(res, error, 'Failed to update memo');
     }
 };
 
@@ -416,7 +411,7 @@ export const deleteMemo = async (req, res, next) => {
 
         successResponse(res, null, 'Memo deleted successfully');
     } catch (error) {
-        next(error);
+        errorResponse(res, error, 'Failed to delete memo');
     }
 };
 
@@ -480,7 +475,7 @@ export const getMemoStats = async (req, res, next) => {
 
         successResponse(res, stats, 'Memo stats retrieved successfully');
     } catch (error) {
-        next(error);
+        errorResponse(res, error, 'Failed to retrieve memo stats');
     }
 };
 
@@ -492,7 +487,7 @@ export const getMemoStats = async (req, res, next) => {
 export const getMemoCount = async (req, res) => {
     try {
         const count = await Memo.countDocuments();
-        res.json({ count });
+        successResponse(res, { count }, 'Memo count retrieved successfully');
     } catch (error) {
         errorResponse(res, error, 'Internal server error');
     }
@@ -536,7 +531,6 @@ export const getMemosReadOverTime = async (req, res) => {
 
         successResponse(res, result, 'Memos read over time retrieved successfully');
     } catch (error) {
-        console.error('Error getting memos read over time:', error);
         errorResponse(res, error, 'Failed to get memos read analytics');
     }
 };
