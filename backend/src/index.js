@@ -35,8 +35,8 @@ const server = createServer(app);
 // Set up Socket.IO
 const io = new Server(server, {
   cors: {
-    origin: '*',
-    credentials: true
+    origin: "*",
+    methods: ["GET", "POST"]
   }
 });
 
@@ -63,13 +63,7 @@ if (process.env.FRONTEND_URL) {
 
 // console.log('Allowed CORS origins:', allowedOrigins);
 
-app.use(cors({
-  origin: '*',
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-  exposedHeaders: ['set-cookie']
-}));
+app.use(cors());
 
 // Serve static files from uploads directory for previews
 const __filename = fileURLToPath(import.meta.url);
