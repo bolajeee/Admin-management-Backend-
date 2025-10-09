@@ -2,6 +2,7 @@ import User from '../models/user.model.js';
 import Memo from '../models/memo.model.js';
 import Task from '../models/task.model.js';
 import Message from '../models/message.model.js';
+import Role from '../models/role.model.js';
 
 export class DashboardService {
     static async getDashboardStats() {
@@ -9,6 +10,8 @@ export class DashboardService {
         today.setHours(0, 0, 0, 0);
         const tomorrow = new Date(today);
         tomorrow.setDate(tomorrow.getDate() + 1);
+
+        const employeeRole = await Role.findOne({ name: "employee" });
 
         const [
             employeeCount,
@@ -18,7 +21,7 @@ export class DashboardService {
             todayMessageCount,
             totalMessageCount
         ] = await Promise.all([
-            User.countDocuments({ role: "employee" }),
+            User.countDocuments({ role: employeeRole._id }),
             Memo.countDocuments({ status: "active" }),
             Task.countDocuments({ status: { $in: ["todo", "in-progress"] } }),
             Task.countDocuments({ status: "completed" }),
