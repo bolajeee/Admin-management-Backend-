@@ -35,8 +35,20 @@ const server = createServer(app);
 // Set up Socket.IO
 const io = new Server(server, {
   cors: {
-    origin: "*",
-    methods: ["GET", "POST"]
+    // More flexible CORS for Socket.IO
+    origin: function(origin, callback) {
+      if (!origin) return callback(null, true);
+      
+      if (origin.startsWith('http://localhost:') || 
+          origin === process.env.FRONTEND_URL ||
+          origin === 'https://admin-management-backend.onrender.com') {
+        return callback(null, true);
+      }
+      
+      
+      callback(new Error('Not allowed by CORS'));
+    },
+    credentials: true
   }
 });
 
@@ -47,36 +59,45 @@ export { io };
 app.use(express.json());
 app.use(cookieParser());
 
+
+
+// Configure CORS with explicit allowed origins
+const allowedOrigins = [
+  'http://localhost:3000',  // Default React port
+  'http://localhost:5173',  // Default Vite port
+  'http://127.0.0.1:3000', // Alternative localhost
+  'http://127.0.0.1:5173', // Alternative Vite localhost
+  'https://admin-management-backend.onrender.com'
+];
+
 // Add FRONTEND_URL from environment if it exists
 if (process.env.FRONTEND_URL) {
   allowedOrigins.push(process.env.FRONTEND_URL);
 }
 
-app.use((req, res, next) => {
-  const allowedOrigins = [
-    'http://localhost:3000',
-    'http://localhost:5173',
-    'http://127.0.0.1:3000',
-    'http://127.0.0.1:5173',
-    'https://admin-management-frontend.vercel.app',
-  ];
-
-  const origin = req.headers.origin;
-  if (allowedOrigins.includes(origin)) {
-    res.setHeader('Access-Control-Allow-Origin', origin);
-  }
-
-  res.header('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Content-Type,Authorization');
-  res.header('Access-Control-Allow-Credentials', 'true');
-
-  // Preflight response
-  if (req.method === 'OPTIONS') {
-    return res.sendStatus(200);
-  }
-
-  next();
-});
+app.use(cors({
+  origin: function(origin, callback) {
+    // Allow requests with no origin (like mobile apps, curl requests)
+    if (!origin) {
+      console.log('No origin header present');
+      return callback(null, true);
+    }
+    
+    // Check if the origin is allowed
+    if (allowedOrigins.includes(origin)) {
+      // console.log('Allowed origin:', origin);
+      return callback(null, true);
+    }
+    
+    // For debugging, log the blocked origin
+    console.log('Blocked by CORS:', origin);
+    callback(new Error('Not allowed by CORS'));
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  exposedHeaders: ['set-cookie']
+}));
 
 // Serve static files from uploads directory for previews
 const __filename = fileURLToPath(import.meta.url);
