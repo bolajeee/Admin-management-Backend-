@@ -77,7 +77,8 @@ app.use(cors({
   credentials: true,
 }));
 
-app.options("*", cors());
+// ✅ Handle preflight requests properly
+app.options("/*", cors({ origin: true, credentials: true }));
 
 // Serve static files from uploads directory for previews
 const __filename = fileURLToPath(import.meta.url);
