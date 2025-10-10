@@ -67,7 +67,8 @@ const allowedOrigins = [
   'http://localhost:5173',  // Default Vite port
   'http://127.0.0.1:3000', // Alternative localhost
   'http://127.0.0.1:5173', // Alternative Vite localhost
-  'https://admin-management-frontend.onrender.com'
+  'https://admin-management-frontend.vercel.app/',
+  'https://admin-management-frontend-7s8aa7wqm.vercel.app'
 ];
 
 // Add FRONTEND_URL from environment if it exists
