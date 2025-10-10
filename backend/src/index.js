@@ -59,8 +59,6 @@ export { io };
 app.use(express.json());
 app.use(cookieParser());
 
-
-
 const allowedOrigins = [
   "http://localhost:5173",
   "https://admin-management-frontend.vercel.app"
@@ -71,14 +69,18 @@ app.use(cors({
     if (!origin || allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
+      console.log("❌ Blocked by CORS:", origin);
       callback(new Error("Not allowed by CORS"));
     }
   },
   credentials: true,
 }));
 
-// ✅ Handle preflight requests properly
-app.options("/*", cors({ origin: true, credentials: true }));
+app.options(/.*/, cors({ origin: true, credentials: true }));
+
+// Then JSON & cookies
+app.use(express.json());
+app.use(cookieParser());
 
 // Serve static files from uploads directory for previews
 const __filename = fileURLToPath(import.meta.url);
