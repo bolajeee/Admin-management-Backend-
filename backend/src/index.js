@@ -55,10 +55,6 @@ const io = new Server(server, {
 // Export io for use in other files
 export { io };
 
-// Middleware
-app.use(express.json());
-app.use(cookieParser());
-
 const allowedOrigins = [
   "http://localhost:5173",
   "https://admin-management-frontend.vercel.app"
@@ -78,7 +74,7 @@ app.use(cors({
 
 app.options(/.*/, cors({ origin: true, credentials: true }));
 
-// Then JSON & cookies
+//  JSON & cookies
 app.use(express.json());
 app.use(cookieParser());
 
