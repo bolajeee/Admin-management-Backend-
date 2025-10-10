@@ -61,44 +61,23 @@ app.use(cookieParser());
 
 
 
-// Configure CORS with explicit allowed origins
 const allowedOrigins = [
-  'http://localhost:3000',  // Default React port
-  'http://localhost:5173',  // Default Vite port
-  'http://127.0.0.1:3000', // Alternative localhost
-  'http://127.0.0.1:5173', // Alternative Vite localhost
-  'https://admin-management-frontend.vercel.app/',
-  'https://admin-management-frontend-7s8aa7wqm.vercel.app/'
+  "http://localhost:5173",
+  "https://admin-management-frontend.vercel.app"
 ];
 
-// Add FRONTEND_URL from environment if it exists
-if (process.env.FRONTEND_URL) {
-  allowedOrigins.push(process.env.FRONTEND_URL);
-}
-
 app.use(cors({
-  origin: function(origin, callback) {
-    // Allow requests with no origin (like mobile apps, curl requests)
-    if (!origin) {
-      console.log('No origin header present');
-      return callback(null, true);
+  origin: function (origin, callback) {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error("Not allowed by CORS"));
     }
-    
-    // Check if the origin is allowed
-    if (allowedOrigins.includes(origin)) {
-      // console.log('Allowed origin:', origin);
-      return callback(null, true);
-    }
-    
-    // For debugging, log the blocked origin
-    console.log('Blocked by CORS:', origin);
-    callback(new Error('Not allowed by CORS'));
   },
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-  exposedHeaders: ['set-cookie']
 }));
+
+app.options("*", cors());
 
 // Serve static files from uploads directory for previews
 const __filename = fileURLToPath(import.meta.url);
