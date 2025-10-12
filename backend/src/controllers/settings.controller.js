@@ -52,6 +52,18 @@ export const updateUserSettings = async (req, res, next) => {
 
     // Apply partial updates to nested fields
     const originalSettings = JSON.parse(JSON.stringify(user.settings)); // Deep copy for audit
+
+    // Ensure settings objects exist
+    if (!user.settings) {
+      user.settings = {};
+    }
+    if (!user.settings.notifications) {
+      user.settings.notifications = {};
+    }
+    if (!user.settings.privacy) {
+      user.settings.privacy = {};
+    }
+
     if (updates.notifications) {
       user.settings.notifications = {
         ...user.settings.notifications,
