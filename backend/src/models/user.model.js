@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import jwt from "jsonwebtoken";
 
 const userSchema = new mongoose.Schema({
   name: {
@@ -72,6 +73,12 @@ const userSchema = new mongoose.Schema({
     }
   }
 });
+
+// Generate auth token
+userSchema.methods.generateAuthToken = function() {
+  const token = jwt.sign({ userId: this._id }, process.env.JWT_SECRET, { expiresIn: '7d' });
+  return token;
+};
 
 // Index for faster queries on commonly used fields
 userSchema.index({ email: 1 });

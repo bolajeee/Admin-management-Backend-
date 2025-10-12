@@ -111,6 +111,21 @@ class AuthService {
 
     await sendEmail(user.email, subject, html);
   }
+
+  static async login(email, password) {
+    const user = await User.findOne({ email }).populate('role');
+    if (!user) {
+      throw new Error('Invalid credentials');
+    }
+
+    const isMatch = await this.comparePasswords(password, user.password);
+    if (!isMatch) {
+      throw new Error('Invalid credentials');
+    }
+
+    const token = user.generateAuthToken(); // Assuming user model has this method
+    return { user, token };
+  }
 }
 
 export default AuthService;
