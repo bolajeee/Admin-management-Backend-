@@ -144,7 +144,7 @@ export const sendMessage = async (req, res) => {
         const messageData = {
             sender: senderId,
             receiver: receiverId,
-            content: text,
+            text: text,
             image: imageUrl,
             status: 'sent',
             readAt: null
