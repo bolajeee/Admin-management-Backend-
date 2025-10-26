@@ -7,16 +7,29 @@ import AuditService from '../services/audit.service.js';
 import FileService from '../services/file.service.js';
 import { AuthValidation } from '../utils/authValidation.js';
 import ValidationUtils from '../utils/validationUtils.js';
-import { successResponse, errorResponse, validationError } from '../utils/responseHandler.js';
+import { successResponse, errorResponse, validationError, createdResponse } from '../utils/responseHandler.js';
 import { sendPasswordResetEmail } from '../lib/email.js';
+import {
+    CustomError,
+    ValidationError,
+    AuthenticationError,
+    NotFoundError,
+    ConflictError
+} from '../utils/customError.js';
+import logger from '../utils/logger.js';
 
 
-export const forgotPassword = async (req, res) => {
+export const forgotPassword = async (req, res, next) => {
     try {
         const { email } = req.body;
+
+        if (!email) {
+            throw new ValidationError('Email is required');
+        }
+
         const user = await User.findOne({ email });
         if (!user) {
-            return errorResponse(res, null, 'User not found', 404);
+            throw new NotFoundError('User not found');
         }
 
         // Generate a password reset token (expires in 1 hour)
@@ -25,33 +38,46 @@ export const forgotPassword = async (req, res) => {
 
         await sendPasswordResetEmail(email, resetLink);
 
+        logger.info('Password reset email sent', { email, userId: user._id });
         return successResponse(res, null, 'Password reset email sent');
     } catch (error) {
-        return errorResponse(res, error, 'Failed to send password reset email');
+        logger.error('Failed to send password reset email', error, { email: req.body.email });
+        next(error);
     }
 }
 
 // Change password for logged-in user
-export const changePassword = async (req, res) => {
+export const changePassword = async (req, res, next) => {
     try {
         const userId = req.user._id;
         const { currentPassword, newPassword } = req.body;
+
         if (!currentPassword || !newPassword) {
-            return errorResponse(res, null, "Current and new password are required.", 400);
+            throw new ValidationError("Current and new password are required");
         }
+
+        if (newPassword.length < 6) {
+            throw new ValidationError("New password must be at least 6 characters long");
+        }
+
         const user = await User.findById(userId);
         if (!user) {
-            return errorResponse(res, null, "User not found.", 404);
+            throw new NotFoundError("User not found");
         }
+
         const isMatch = await AuthService.comparePasswords(currentPassword, user.password);
         if (!isMatch) {
-            return errorResponse(res, null, "Current password is incorrect.", 400);
+            throw new AuthenticationError("Current password is incorrect");
         }
+
         user.password = await AuthService.hashPassword(newPassword);
         await user.save();
-        return successResponse(res, null, "Password changed successfully.");
+
+        logger.info('Password changed successfully', { userId });
+        return successResponse(res, null, "Password changed successfully");
     } catch (error) {
-        return errorResponse(res, error, "Failed to change password.");
+        logger.error('Failed to change password', error, { userId: req.user?._id });
+        next(error);
     }
 };
 
@@ -67,21 +93,22 @@ export const resetPassword = async (req, res) => {
     }
 }
 
-export const signupUser = async (req, res) => {
+export const signupUser = async (req, res, next) => {
     try {
-        console.log('signupUser: req.body', req.body);
+        logger.debug('User signup attempt', { email: req.body.email });
+
         const validation = AuthValidation.validateSignup(req.body);
         if (!validation.isValid) {
-            console.log('signupUser: validation errors', validation.errors);
-            return validationError(res, validation.errors);
+            logger.warn('Signup validation failed', { errors: validation.errors });
+            throw new ValidationError('Validation failed', validation.errors);
         }
 
         const { name, email, password } = req.body;
 
         const userExists = await User.findOne({ email });
         if (userExists) {
-            console.log('signupUser: user already exists');
-            return errorResponse(res, null, 'User already exists', 400);
+            logger.warn('Signup attempt with existing email', { email });
+            throw new ConflictError('User already exists');
         }
 
         const userData = {
@@ -98,6 +125,15 @@ export const signupUser = async (req, res) => {
             user: user._id,
             action: 'user_signup',
         });
+
+        logger.info('User created successfully', { userId: user._id, email });
+        return createdResponse(res, {
+            _id: user._id,
+            fullName: user.fullName,
+            email: user.email,
+            role: user.role,
+            profilePic: user.profilePic
+        }, 'User created successfully');
 
         return successResponse(
             res,
@@ -227,7 +263,7 @@ export const createUser = async (req, res) => {
             details: { userId: user._id, email: user.email }
         });
         return successResponse(
-            res, 
+            res,
             AuthService.generateAuthResponse(user),
             'User created successfully',
             201

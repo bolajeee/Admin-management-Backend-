@@ -7,6 +7,14 @@ import { Server } from 'socket.io';
 import { connectDB } from './lib/db.js';
 import User from './models/user.model.js';
 
+// Import middleware
+import { globalErrorHandler, notFoundHandler } from './middleware/errorHandler.middleware.js';
+import { requestLogger, securityHeaders } from './middleware/requestLogger.middleware.js';
+import logger from './utils/logger.js';
+
+// Import Swagger documentation
+import { specs, swaggerUi } from './config/swagger.js';
+
 // Import routes
 import authRoute from './routes/auth.route.js';
 import messageRoute from './routes/message.route.js';
@@ -36,16 +44,16 @@ const server = createServer(app);
 const io = new Server(server, {
   cors: {
     // More flexible CORS for Socket.IO
-    origin: function(origin, callback) {
+    origin: function (origin, callback) {
       if (!origin) return callback(null, true);
-      
-      if (origin.startsWith('http://localhost:') || 
-          origin === process.env.FRONTEND_URL ||
-          origin === 'https://admin-management-backend.onrender.com') {
+
+      if (origin.startsWith('http://localhost:') ||
+        origin === process.env.FRONTEND_URL ||
+        origin === 'https://admin-management-backend.onrender.com') {
         return callback(null, true);
       }
-      
-      
+
+
       callback(new Error('Not allowed by CORS'));
     },
     credentials: true
@@ -74,15 +82,57 @@ app.use(cors({
 
 app.options(/.*/, cors({ origin: true, credentials: true }));
 
-//  JSON & cookies
-app.use(express.json());
+// Security headers
+app.use(securityHeaders);
+
+// Request logging
+app.use(requestLogger);
+
+// JSON & cookies
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(cookieParser());
 
 // Serve static files from uploads directory for previews
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Routes
+// API Documentation
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(specs, {
+  explorer: true,
+  customCss: '.swagger-ui .topbar { display: none }',
+  customSiteTitle: 'Admin Management API Documentation'
+}));
+
+// Root endpoint
+app.get('/', (req, res) => {
+  res.status(200).json({
+    success: true,
+    message: 'Admin Management System API',
+    version: '1.0.0',
+    documentation: '/api-docs',
+    health: '/health',
+    timestamp: new Date().toISOString()
+  });
+});
+
+// Health check endpoint
+app.get('/health', (req, res) => {
+  res.status(200).json({
+    success: true,
+    message: 'Server is healthy',
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    environment: process.env.NODE_ENV
+  });
+});
+
+// Handle favicon and other browser requests
+app.get('/favicon.ico', (req, res) => res.status(204).end());
+app.get('/robots.txt', (req, res) => res.status(204).end());
+app.get('/sitemap.xml', (req, res) => res.status(204).end());
+
+// API Routes
 app.use("/api/auth", authRoute);
 app.use("/api/settings", settingsRoute);
 app.use("/api/messages", messageRoute);
@@ -96,18 +146,24 @@ app.use("/api/teams", teamRoute);
 app.use("/api/audit", auditRoute);
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
+// 404 handler for undefined routes
+app.use(notFoundHandler);
+
+// Global error handler (must be last)
+app.use(globalErrorHandler);
+
 // Socket.IO connection handling
 io.on('connection', (socket) => {
   console.log('a user connected', socket.id);
-  
+
   // Handle user joining
   socket.on('join', async (userId) => {
     socket.join(userId);
     console.log(`User ${userId} joined their room`);
-    
+
     // Update user's socket ID in database
     try {
-      await User.findByIdAndUpdate(userId, { 
+      await User.findByIdAndUpdate(userId, {
         socketId: socket.id,
         isActive: true,
         lastSeen: new Date()
@@ -116,7 +172,7 @@ io.on('connection', (socket) => {
       console.error('Error updating socket ID:', error);
     }
   });
-  
+
   // Handle sending messages
   socket.on('sendMessage', async (message) => {
     try {
@@ -126,16 +182,16 @@ io.on('connection', (socket) => {
       console.error('Error sending message via socket:', error);
     }
   });
-  
+
   // Handle user disconnection
   socket.on('disconnect', async () => {
     console.log('user disconnected');
-    
+
     // Update user status in database
     try {
       await User.findOneAndUpdate(
         { socketId: socket.id },
-        { 
+        {
           isActive: false,
           lastSeen: new Date(),
           socketId: ''
@@ -151,13 +207,40 @@ io.on('connection', (socket) => {
 // Create uploads directory if it doesn't exist
 const uploadsDir = path.join(__dirname, '../uploads/reports');
 if (!fs.existsSync(uploadsDir)) {
-    fs.mkdirSync(uploadsDir, { recursive: true });
-    console.log('Created uploads directory at', uploadsDir);
+  fs.mkdirSync(uploadsDir, { recursive: true });
+  console.log('Created uploads directory at', uploadsDir);
 }
+
+// Handle uncaught exceptions
+process.on('uncaughtException', (err) => {
+  logger.error('Uncaught Exception:', err);
+  process.exit(1);
+});
+
+// Handle unhandled promise rejections
+process.on('unhandledRejection', (err) => {
+  logger.error('Unhandled Rejection:', err);
+  server.close(() => {
+    process.exit(1);
+  });
+});
+
+// Graceful shutdown
+process.on('SIGTERM', () => {
+  logger.info('SIGTERM received, shutting down gracefully');
+  server.close(() => {
+    logger.info('Process terminated');
+  });
+});
 
 // Connect to database and start server
 connectDB().then(() => {
   server.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
+    logger.info(`Server running on port ${PORT}`);
+    logger.info(`API Documentation available at http://localhost:${PORT}/api-docs`);
+    logger.info(`Health check available at http://localhost:${PORT}/health`);
   });
+}).catch((error) => {
+  logger.error('Failed to connect to database:', error);
+  process.exit(1);
 });
