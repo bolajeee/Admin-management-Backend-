@@ -43,6 +43,10 @@ const userSchema = new mongoose.Schema({
   lastSeen: {
     type: Date,
   },
+  isOnline: {
+    type: Boolean,
+    default: false,
+  },
   socketId: {
     type: String,
     default: "",
@@ -54,16 +58,16 @@ const userSchema = new mongoose.Schema({
     type: Date,
   },
   settings: {
-  notifications: {
-    email: { type: Boolean, default: true },
-    browser: { type: Boolean, default: true },
-    sms: { type: Boolean, default: false }
+    notifications: {
+      email: { type: Boolean, default: true },
+      browser: { type: Boolean, default: true },
+      sms: { type: Boolean, default: false }
+    },
+    privacy: {
+      showOnlineStatus: { type: Boolean, default: true },
+      showReadReceipts: { type: Boolean, default: true }
+    }
   },
-  privacy: {
-    showOnlineStatus: { type: Boolean, default: true },
-    showReadReceipts: { type: Boolean, default: true }
-  }
-},
 }, {
   timestamps: true,
   toJSON: {
@@ -75,7 +79,7 @@ const userSchema = new mongoose.Schema({
 });
 
 // Generate auth token
-userSchema.methods.generateAuthToken = function() {
+userSchema.methods.generateAuthToken = function () {
   const token = jwt.sign({ userId: this._id }, process.env.JWT_SECRET, { expiresIn: '7d' });
   return token;
 };

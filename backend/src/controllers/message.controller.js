@@ -73,16 +73,16 @@ export const getMessages = async (req, res) => {
         ]);
 
         // Mark messages as read
-        const unreadMessages = messages.filter(msg => 
+        const unreadMessages = messages.filter(msg =>
             msg.receiver.toString() === myId.toString() && !msg.readAt
         );
 
         if (unreadMessages.length > 0) {
             await Message.updateMany(
-                { 
+                {
                     _id: { $in: unreadMessages.map(msg => msg._id) }
                 },
-                { 
+                {
                     $set: { readAt: new Date(), status: 'read' }
                 }
             );
@@ -94,7 +94,7 @@ export const getMessages = async (req, res) => {
             });
         }
 
-        return successResponse(res, { 
+        return successResponse(res, {
             messages,
             pagination: {
                 page,
@@ -161,16 +161,16 @@ export const sendMessage = async (req, res) => {
             User.findByIdAndUpdate(receiverId, { lastMessageAt: new Date() })
         ]);
 
-        return successResponse(res, 
-            { 
+        return successResponse(res,
+            {
                 message: newMessage,
                 sender: {
                     _id: sender._id,
                     name: sender.name,
                     profilePicture: sender.profilePicture
                 }
-            }, 
-            'Message sent successfully', 
+            },
+            'Message sent successfully',
             201
         );
     } catch (error) {
@@ -197,7 +197,7 @@ export const getRecentMessages = async (req, res) => {
             .limit(15)
             .populate('sender', 'name email profilePicture')
             .populate('receiver', 'name email profilePicture');
-            
+
         return successResponse(res, { messages }, 'Recent messages retrieved successfully');
     } catch (error) {
         return errorResponse(res, error, 'Error retrieving recent messages');
@@ -215,7 +215,7 @@ export const getTodayMessageCount = async (req, res) => {
         const count = await Message.countDocuments({
             createdAt: { $gte: startOfDay, $lte: endOfDay }
         });
-        
+
         return successResponse(res, { count }, 'Today\'s message count retrieved successfully');
     } catch (error) {
         return errorResponse(res, error, 'Error retrieving today\'s message count');
@@ -248,7 +248,7 @@ export const searchMessages = async (req, res) => {
 
         const { searchTerm } = req.query;
         const userId = req.user._id;
-        
+
         const messages = await MessageService.searchMessages(userId, searchTerm);
         return successResponse(res, { messages }, 'Messages retrieved successfully');
     } catch (error) {
@@ -281,8 +281,8 @@ export const updateMessageNotificationPreferences = async (req, res) => {
         // Update user's notification preferences
         const user = await User.findByIdAndUpdate(
             userId,
-            { 
-                $set: { 
+            {
+                $set: {
                     'notificationPreferences.messages': { email, sms }
                 }
             },
@@ -293,11 +293,130 @@ export const updateMessageNotificationPreferences = async (req, res) => {
             return errorResponse(res, null, 'User not found', 404);
         }
 
-        return successResponse(res, 
+        return successResponse(res,
             { preferences: user.notificationPreferences.messages },
             'Notification preferences updated successfully'
         );
     } catch (error) {
         return errorResponse(res, error, 'Error updating notification preferences');
+    }
+};
+
+// Get conversation list with last message info
+export const getConversations = async (req, res) => {
+    try {
+        const userId = req.user._id;
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 20;
+        const skip = (page - 1) * limit;
+
+        // Get all conversations for the user
+        const conversations = await Message.aggregate([
+            {
+                $match: {
+                    $or: [
+                        { sender: userId },
+                        { receiver: userId }
+                    ]
+                }
+            },
+            {
+                $sort: { createdAt: -1 }
+            },
+            {
+                $group: {
+                    _id: {
+                        $cond: [
+                            { $eq: ['$sender', userId] },
+                            '$receiver',
+                            '$sender'
+                        ]
+                    },
+                    lastMessage: { $first: '$$ROOT' },
+                    unreadCount: {
+                        $sum: {
+                            $cond: [
+                                {
+                                    $and: [
+                                        { $eq: ['$receiver', userId] },
+                                        { $eq: ['$readAt', null] }
+                                    ]
+                                },
+                                1,
+                                0
+                            ]
+                        }
+                    }
+                }
+            },
+            {
+                $lookup: {
+                    from: 'users',
+                    localField: '_id',
+                    foreignField: '_id',
+                    as: 'user'
+                }
+            },
+            {
+                $unwind: '$user'
+            },
+            {
+                $project: {
+                    user: {
+                        _id: '$user._id',
+                        name: '$user.name',
+                        email: '$user.email',
+                        profilePicture: '$user.profilePicture',
+                        isActive: '$user.isActive',
+                        lastSeen: '$user.lastSeen'
+                    },
+                    lastMessage: {
+                        _id: '$lastMessage._id',
+                        text: '$lastMessage.text',
+                        image: '$lastMessage.image',
+                        createdAt: '$lastMessage.createdAt',
+                        sender: '$lastMessage.sender'
+                    },
+                    unreadCount: 1
+                }
+            },
+            {
+                $sort: { 'lastMessage.createdAt': -1 }
+            },
+            {
+                $skip: skip
+            },
+            {
+                $limit: limit
+            }
+        ]);
+
+        return successResponse(res, {
+            conversations,
+            pagination: {
+                page,
+                limit,
+                hasMore: conversations.length === limit
+            }
+        }, 'Conversations retrieved successfully');
+    } catch (error) {
+        return errorResponse(res, error, 'Error retrieving conversations');
+    }
+};
+
+// Update user online status
+export const updateOnlineStatus = async (req, res) => {
+    try {
+        const userId = req.user._id;
+        const { isOnline = true } = req.body;
+
+        await User.findByIdAndUpdate(userId, {
+            isOnline,
+            lastSeen: isOnline ? null : new Date()
+        });
+
+        return successResponse(res, { isOnline }, 'Online status updated successfully');
+    } catch (error) {
+        return errorResponse(res, error, 'Error updating online status');
     }
 };

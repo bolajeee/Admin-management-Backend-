@@ -1,6 +1,6 @@
 import express from "express"
 import { protectRoute } from "../middleware/auth.middleware.js"
-import { getEmployeeCount, getMessages, getRecentMessages, getTodayMessageCount, getUsers, sendMessage } from "../controllers/message.controller.js"
+import { getEmployeeCount, getMessages, getRecentMessages, getTodayMessageCount, getUsers, sendMessage, getConversations, updateOnlineStatus } from "../controllers/message.controller.js"
 import multer from 'multer';
 import { sanitizeInput } from "../middleware/sanitization.middleware.js";
 import { asyncHandler } from '../middleware/errorHandler.middleware.js';
@@ -306,5 +306,9 @@ router.get("/recent", protectRoute, asyncHandler(getRecentMessages));
  *                           example: "2024-01-01"
  */
 router.get("/today", asyncHandler(getTodayMessageCount));
+
+// New endpoints
+router.get("/conversations", protectRoute, asyncHandler(getConversations));
+router.patch("/online-status", protectRoute, asyncHandler(updateOnlineStatus));
 
 export default router
