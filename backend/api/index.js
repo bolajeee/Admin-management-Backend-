@@ -1,40 +1,113 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import cookieParser from 'cookie-parser';
+import { connectDB } from '../src/lib/db.js';
+
+// Import middleware
+import { globalErrorHandler, notFoundHandler } from '../src/middleware/errorHandler.middleware.js';
+
+// Use safe logger for serverless
+import logger from '../src/utils/logger-safe.js';
+
+// Security headers middleware
+const securityHeaders = (req, res, next) => {
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('X-Frame-Options', 'DENY');
+    res.setHeader('X-XSS-Protection', '1; mode=block');
+    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+
+    if (process.env.NODE_ENV === 'production') {
+        res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+    }
+
+    next();
+};
+
+// Import Swagger documentation
+import { specs, swaggerUi } from '../src/config/swagger.js';
+
+// Import routes
+import authRoute from '../src/routes/auth.route.js';
+import messageRoute from '../src/routes/message.route.js';
+import memoRoute from '../src/routes/memo.route.js';
+import taskRoute from '../src/routes/task.route.js';
+import dashboardRoute from '../src/routes/dashboard.route.js';
+import adminRoute from '../src/routes/admin.route.js';
+import reportRoute from '../src/routes/report.route.js';
+import settingsRoute from '../src/routes/settings.route.js';
+import roleRoute from '../src/routes/role.route.js';
+import teamRoute from '../src/routes/team.route.js';
+import auditRoute from '../src/routes/audit.route.js';
 
 dotenv.config();
 
 const app = express();
 
-// Basic CORS setup
+const allowedOrigins = [
+    "http://localhost:5173",
+    "https://admin-management-frontend.vercel.app"
+];
+
 app.use(cors({
-    origin: [
-        "http://localhost:5173",
-        "https://admin-management-frontend.vercel.app"
-    ],
-    credentials: true
+    origin: function (origin, callback) {
+        if (!origin || allowedOrigins.includes(origin)) {
+            callback(null, true);
+        } else {
+            console.log("❌ Blocked by CORS:", origin);
+            callback(new Error("Not allowed by CORS"));
+        }
+    },
+    credentials: true,
 }));
 
-// Basic middleware
+app.options(/.*/, cors({ origin: true, credentials: true }));
+
+// Security headers
+app.use(securityHeaders);
+
+// Simple request logging for serverless
+app.use((req, res, next) => {
+    const start = Date.now();
+    res.on('finish', () => {
+        const duration = Date.now() - start;
+        logger.http(req, res, duration);
+    });
+    next();
+});
+
+// JSON & cookies
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(cookieParser());
 
-// Basic routes
+// API Documentation
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(specs, {
+    explorer: true,
+    customCss: '.swagger-ui .topbar { display: none }',
+    customSiteTitle: 'Admin Management API Documentation'
+}));
+
+// Root endpoint
 app.get('/', (req, res) => {
     res.status(200).json({
         success: true,
-        message: 'Admin Management System API - Serverless',
+        message: 'Admin Management System API',
         version: '1.0.0',
-        timestamp: new Date().toISOString(),
-        environment: process.env.NODE_ENV || 'unknown'
+        documentation: '/api-docs',
+        health: '/health',
+        timestamp: new Date().toISOString()
     });
 });
 
+// Health check endpoint
 app.get('/health', (req, res) => {
     res.status(200).json({
         success: true,
         message: 'Server is healthy',
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        uptime: process.uptime(),
+        environment: process.env.NODE_ENV
     });
 });
 
@@ -44,26 +117,53 @@ app.get('/favicon.png', (req, res) => res.status(204).end());
 app.get('/robots.txt', (req, res) => res.status(204).end());
 app.get('/sitemap.xml', (req, res) => res.status(204).end());
 
-// Catch all other routes
-app.use('*', (req, res) => {
-    res.status(404).json({
-        success: false,
-        message: 'Route not found',
-        path: req.originalUrl
-    });
-});
+// API Routes
+app.use("/api/auth", authRoute);
+app.use("/api/settings", settingsRoute);
+app.use("/api/messages", messageRoute);
+app.use("/api/memos", memoRoute);
+app.use("/api/tasks", taskRoute);
+app.use("/api/dashboard", dashboardRoute);
+app.use("/api/admin", adminRoute);
+app.use("/api/reports", reportRoute);
+app.use("/api/roles", roleRoute);
+app.use("/api/teams", teamRoute);
+app.use("/api/audit", auditRoute);
+
+// 404 handler for undefined routes
+app.use(notFoundHandler);
+
+// Global error handler (must be last)
+app.use(globalErrorHandler);
+
+// Connect to database
+let isConnected = false;
+
+const connectToDatabase = async () => {
+    if (isConnected) {
+        return;
+    }
+
+    try {
+        await connectDB();
+        isConnected = true;
+    } catch (error) {
+        console.error('Failed to connect to database:', error);
+        throw error;
+    }
+};
 
 // Serverless function handler
-export default function handler(req, res) {
+export default async function handler(req, res) {
     try {
-        console.log(`${req.method} ${req.url}`);
+        await connectToDatabase();
         return app(req, res);
     } catch (error) {
         console.error('Handler error:', error);
         return res.status(500).json({
             success: false,
             message: 'Internal server error',
-            error: error.message
+            error: process.env.NODE_ENV === 'development' ? error.message : 'Something went wrong'
         });
     }
 }
