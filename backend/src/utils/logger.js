@@ -5,10 +5,18 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Create logs directory if it doesn't exist
-const logsDir = path.join(__dirname, '../../logs');
-if (!fs.existsSync(logsDir)) {
-    fs.mkdirSync(logsDir, { recursive: true });
+// In serverless environments (like Vercel), use /tmp for file operations
+// In development, use the logs directory
+const isServerless = process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME;
+const logsDir = isServerless ? '/tmp' : path.join(__dirname, '../../logs');
+
+// Only create logs directory in non-serverless environments
+if (!isServerless && !fs.existsSync(logsDir)) {
+    try {
+        fs.mkdirSync(logsDir, { recursive: true });
+    } catch (error) {
+        console.warn('Could not create logs directory:', error.message);
+    }
 }
 
 class Logger {
@@ -27,6 +35,11 @@ class Logger {
     }
 
     writeToFile(filename, content) {
+        // Skip file writing in serverless environments to avoid errors
+        if (isServerless) {
+            return;
+        }
+
         try {
             fs.appendFileSync(filename, content);
         } catch (error) {

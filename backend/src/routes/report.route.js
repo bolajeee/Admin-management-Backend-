@@ -19,11 +19,16 @@ import { validateObjectId, validatePagination } from '../middleware/validation.m
 // Set up directory for uploads
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const uploadsDir = path.join(__dirname, '../../uploads/reports');
+const isServerless = process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME;
+const uploadsDir = isServerless ? '/tmp/reports' : path.join(__dirname, '../../uploads/reports');
 
-// Ensure upload directory exists
-if (!fs.existsSync(uploadsDir)) {
-  fs.mkdirSync(uploadsDir, { recursive: true });
+// Ensure upload directory exists (skip in serverless environments)
+if (!isServerless && !fs.existsSync(uploadsDir)) {
+  try {
+    fs.mkdirSync(uploadsDir, { recursive: true });
+  } catch (error) {
+    console.warn('Could not create uploads directory:', error.message);
+  }
 }
 
 // Configure multer storage

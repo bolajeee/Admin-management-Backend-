@@ -204,11 +204,18 @@ io.on('connection', (socket) => {
 });
 
 
-// Create uploads directory if it doesn't exist
-const uploadsDir = path.join(__dirname, '../uploads/reports');
-if (!fs.existsSync(uploadsDir)) {
-  fs.mkdirSync(uploadsDir, { recursive: true });
-  console.log('Created uploads directory at', uploadsDir);
+// Create uploads directory if it doesn't exist (skip in serverless environments)
+const isServerless = process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME;
+if (!isServerless) {
+  const uploadsDir = path.join(__dirname, '../uploads/reports');
+  if (!fs.existsSync(uploadsDir)) {
+    try {
+      fs.mkdirSync(uploadsDir, { recursive: true });
+      console.log('Created uploads directory at', uploadsDir);
+    } catch (error) {
+      console.warn('Could not create uploads directory:', error.message);
+    }
+  }
 }
 
 // Handle uncaught exceptions

@@ -45,9 +45,11 @@ const router = express.Router();
  */
 
 // Configure multer for secure file uploads
+const isServerless = process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME;
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
-    cb(null, 'uploads/')
+    const uploadPath = isServerless ? '/tmp' : 'uploads/';
+    cb(null, uploadPath);
   },
   filename: function (req, file, cb) {
     cb(null, Date.now() + '-' + file.originalname)
