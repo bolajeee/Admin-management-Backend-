@@ -6,7 +6,23 @@ import { connectDB } from '../src/lib/db.js';
 
 // Import middleware
 import { globalErrorHandler, notFoundHandler } from '../src/middleware/errorHandler.middleware.js';
-import { requestLogger, securityHeaders } from '../src/middleware/requestLogger.middleware.js';
+
+// Use safe logger for serverless
+import logger from '../src/utils/logger-safe.js';
+
+// Security headers middleware
+const securityHeaders = (req, res, next) => {
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('X-Frame-Options', 'DENY');
+    res.setHeader('X-XSS-Protection', '1; mode=block');
+    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+
+    if (process.env.NODE_ENV === 'production') {
+        res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+    }
+
+    next();
+};
 
 // Import Swagger documentation
 import { specs, swaggerUi } from '../src/config/swagger.js';
@@ -50,8 +66,15 @@ app.options(/.*/, cors({ origin: true, credentials: true }));
 // Security headers
 app.use(securityHeaders);
 
-// Request logging
-app.use(requestLogger);
+// Simple request logging for serverless
+app.use((req, res, next) => {
+    const start = Date.now();
+    res.on('finish', () => {
+        const duration = Date.now() - start;
+        logger.http(req, res, duration);
+    });
+    next();
+});
 
 // JSON & cookies
 app.use(express.json({ limit: '10mb' }));

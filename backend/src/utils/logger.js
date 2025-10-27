@@ -2,20 +2,34 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+// Detect serverless environment
+const isServerless = !!(
+    process.env.VERCEL ||
+    process.env.AWS_LAMBDA_FUNCTION_NAME ||
+    process.env.LAMBDA_TASK_ROOT ||
+    process.env.VERCEL_ENV ||
+    process.env.NETLIFY ||
+    process.platform === 'linux' && process.env.NODE_ENV === 'production' && !process.env.PM2_HOME
+);
 
-// In serverless environments (like Vercel), use /tmp for file operations
-// In development, use the logs directory
-const isServerless = process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME;
-const logsDir = isServerless ? '/tmp' : path.join(__dirname, '../../logs');
+let logsDir = '/tmp';
+let canWriteFiles = false;
 
-// Only create logs directory in non-serverless environments
-if (!isServerless && !fs.existsSync(logsDir)) {
+// Only set up file logging in non-serverless environments
+if (!isServerless) {
     try {
-        fs.mkdirSync(logsDir, { recursive: true });
+        const __filename = fileURLToPath(import.meta.url);
+        const __dirname = path.dirname(__filename);
+        logsDir = path.join(__dirname, '../../logs');
+
+        if (!fs.existsSync(logsDir)) {
+            fs.mkdirSync(logsDir, { recursive: true });
+        }
+        canWriteFiles = true;
     } catch (error) {
-        console.warn('Could not create logs directory:', error.message);
+        console.warn('Could not create logs directory, file logging disabled:', error.message);
+        canWriteFiles = false;
+        logsDir = '/tmp'; // fallback
     }
 }
 
@@ -35,8 +49,8 @@ class Logger {
     }
 
     writeToFile(filename, content) {
-        // Skip file writing in serverless environments to avoid errors
-        if (isServerless) {
+        // Skip file writing in serverless environments or if we can't write files
+        if (isServerless || !canWriteFiles) {
             return;
         }
 
