@@ -457,7 +457,7 @@ router.get('/:taskId/comments', sanitizeInput, validateObjectId('taskId'), async
  *               file:
  *                 type: string
  *                 format: binary
- *                 description: File to upload (max 10MB, allowed types: png, jpg, jpeg, gif, pdf, doc, docx, txt, xls, xlsx, csv)
+ *                 description: "File to upload (max 10MB)"
  *     responses:
  *       201:
  *         description: Attachment uploaded successfully

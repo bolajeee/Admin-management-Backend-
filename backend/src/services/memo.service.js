@@ -15,9 +15,17 @@ export class MemoService {
             userId
         } = queryParams;
 
-        let baseQuery = {};
+        let baseQuery = {
+            // Filter out deleted memos by default
+            status: { $ne: 'deleted' }
+        };
 
-        if (user.role !== 'admin') {
+        // Check if user is admin - role could be populated or not
+        const isAdmin = user.role?.name === 'admin' ||
+            (typeof user.role === 'string' && user.role === 'admin') ||
+            user.isAdmin === true;
+
+        if (!isAdmin) {
             baseQuery.recipients = user._id;
         } else if (userId) {
             baseQuery.recipients = userId;
@@ -33,6 +41,10 @@ export class MemoService {
             } else if (status === 'expired') {
                 baseQuery.expiresAt = { $lte: new Date() };
                 baseQuery.status = 'active';
+            } else if (status === 'deleted') {
+                // Override the default filter to show deleted memos if specifically requested
+                delete baseQuery.status;
+                baseQuery.status = 'deleted';
             } else {
                 baseQuery.status = status;
             }

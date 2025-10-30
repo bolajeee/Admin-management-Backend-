@@ -25,13 +25,18 @@ export const createMemo = async (req, res, next) => {
             metadata = {}
         } = req.body;
 
-        // Validate recipients
-        if (recipients.length === 0 && req.user.role.name !== 'admin') {
-            throw new BadRequestError('At least one recipient is required');
+        console.log('Backend: Creating memo with recipients:', recipients);
+
+        // Check if user is admin
+        const isAdmin = req.user.role?.name === 'admin';
+
+        // Validate recipients - ensure we have recipients for non-broadcast memos
+        if (!recipients || recipients.length === 0) {
+            throw new BadRequestError('At least one recipient is required for non-broadcast memos');
         }
 
         // For non-admin users, ensure they can only send to themselves or their team
-        if (req.user.role.name !== 'admin') {
+        if (!isAdmin) {
             const validRecipients = await User.find({
                 _id: { $in: recipients },
                 $or: [
@@ -209,17 +214,27 @@ export const getMemoById = async (req, res, next) => {
  */
 export const markMemoAsRead = async (req, res, next) => {
     try {
+        console.log('Backend: Marking memo as read:', req.params.memoId, 'by user:', req.user._id);
         const memo = await Memo.findById(req.params.memoId);
 
         if (!memo) {
+            console.log('Backend: Memo not found:', req.params.memoId);
             throw new NotFoundError('Memo not found');
         }
 
-        if (!memo.recipients.some(recipient => recipient.equals(req.user._id))) {
+        console.log('Backend: Found memo:', memo.title, 'recipients:', memo.recipients.length);
+
+        // Check if user is admin or a recipient
+        const isAdmin = req.user.role?.name === 'admin';
+        const isRecipient = memo.recipients.some(recipient => recipient.equals(req.user._id));
+
+        if (!isAdmin && !isRecipient) {
+            console.log('Backend: User not a recipient and not admin. User:', req.user._id, 'Recipients:', memo.recipients);
             throw new ForbiddenError('You are not a recipient of this memo');
         }
 
         if (memo.readBy.some(read => read.user.equals(req.user._id))) {
+            console.log('Backend: Memo already marked as read by user');
             return successResponse(res, null, 'Memo already marked as read');
         }
 
@@ -229,6 +244,7 @@ export const markMemoAsRead = async (req, res, next) => {
         });
 
         await memo.save();
+        console.log('Backend: Memo marked as read successfully');
 
         // Emit real-time update
         io.to(req.user.socketId).emit('memo_read', {
@@ -250,17 +266,25 @@ export const markMemoAsRead = async (req, res, next) => {
 export const acknowledgeMemo = async (req, res, next) => {
     try {
         const { comments = '' } = req.body;
+        console.log('Backend: Acknowledging memo:', req.params.memoId, 'by user:', req.user._id);
 
-        const memo = await Memo.findOne({
-            _id: req.params.memoId,
-            recipients: req.user._id
-        });
+        // For admin users, find any memo. For regular users, only memos they're recipients of
+        const isAdmin = req.user.role?.name === 'admin';
+        const memo = isAdmin ?
+            await Memo.findById(req.params.memoId) :
+            await Memo.findOne({
+                _id: req.params.memoId,
+                recipients: req.user._id
+            });
 
         if (!memo) {
+            console.log('Backend: Memo not found or user not recipient');
             throw new NotFoundError('Memo not found or access denied');
         }
 
+        console.log('Backend: Found memo, calling acknowledge method');
         await memo.acknowledge(req.user._id, comments);
+        console.log('Backend: Memo acknowledged successfully');
 
         // Emit real-time update
         io.to(memo.createdBy.socketId).emit('memo_acknowledged', {
@@ -283,17 +307,25 @@ export const acknowledgeMemo = async (req, res, next) => {
 export const snoozeMemo = async (req, res, next) => {
     try {
         const { durationMinutes = 15, comments = '' } = req.body;
+        console.log('Backend: Snoozing memo:', req.params.memoId, 'by user:', req.user._id, 'for', durationMinutes, 'minutes');
 
-        const memo = await Memo.findOne({
-            _id: req.params.memoId,
-            recipients: req.user._id
-        });
+        // For admin users, find any memo. For regular users, only memos they're recipients of
+        const isAdmin = req.user.role?.name === 'admin';
+        const memo = isAdmin ?
+            await Memo.findById(req.params.memoId) :
+            await Memo.findOne({
+                _id: req.params.memoId,
+                recipients: req.user._id
+            });
 
         if (!memo) {
+            console.log('Backend: Memo not found or user not recipient');
             throw new NotFoundError('Memo not found or access denied');
         }
 
+        console.log('Backend: Found memo, calling snooze method');
         await memo.snooze(req.user._id, durationMinutes, comments);
+        console.log('Backend: Memo snoozed successfully');
 
         successResponse(res, null, `Memo snoozed for ${durationMinutes} minutes`);
     } catch (error) {
@@ -309,35 +341,70 @@ export const snoozeMemo = async (req, res, next) => {
 export const updateMemo = async (req, res, next) => {
     try {
         const { title, content, severity, recipients, deadline, expiresAt, status } = req.body;
+        console.log('Backend: Updating memo:', req.params.memoId, 'by user:', req.user._id);
+        console.log('Backend: Update data:', { title, content, severity, recipients, deadline, expiresAt, status });
 
         const memo = await Memo.findById(req.params.memoId);
 
         if (!memo) {
+            console.log('Backend: Memo not found');
             throw new NotFoundError('Memo not found');
         }
 
-        if (!memo.createdBy.equals(req.user._id)) {
+        // Check if user is admin or the creator
+        const isAdmin = req.user.role?.name === 'admin';
+        const isCreator = memo.createdBy.equals(req.user._id);
+
+        console.log('Backend: Permission check - isAdmin:', isAdmin, 'isCreator:', isCreator);
+
+        if (!isAdmin && !isCreator) {
+            console.log('Backend: User not authorized to update memo');
             throw new ForbiddenError('You are not authorized to update this memo');
         }
 
-        // Allow status changes even if the memo is not currently `active`
-        if (status && Object.values(memoStatus).includes(status)) {
-            memo.status = status;
+        console.log('Backend: Current memo status:', memo.status);
+
+        // Update basic fields
+        if (title !== undefined) {
+            console.log('Backend: Updating title from', memo.title, 'to', title);
+            memo.title = title;
+        }
+        if (content !== undefined) {
+            console.log('Backend: Updating content');
+            memo.content = content;
+        }
+        if (severity !== undefined) {
+            console.log('Backend: Updating severity from', memo.severity, 'to', severity);
+            memo.severity = severity;
+        }
+        if (deadline !== undefined) {
+            console.log('Backend: Updating deadline');
+            memo.deadline = deadline ? new Date(deadline) : null;
+        } else if (memo.severity !== 'low' && !memo.deadline) {
+            // If severity is not low and no deadline is provided, set a default deadline
+            console.log('Backend: Setting default deadline for non-low severity memo');
+            memo.deadline = memo.expiresAt || new Date(Date.now() + 24 * 60 * 60 * 1000); // Default to 24 hours from now or expiresAt
+        }
+        if (expiresAt !== undefined) {
+            console.log('Backend: Updating expiresAt');
+            memo.expiresAt = expiresAt ? new Date(expiresAt) : null;
+        } else if (memo.severity !== 'low' && !memo.expiresAt) {
+            // If severity is not low and no expiresAt is provided, set a default
+            console.log('Backend: Setting default expiresAt for non-low severity memo');
+            memo.expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // Default to 24 hours from now
         }
 
-        // Only allow other fields to be updated if the memo is `active`
-        if (memo.status === 'active') {
-            if (title) memo.title = title;
-            if (content) memo.content = content;
-            if (severity) memo.severity = severity;
-            if (deadline) memo.deadline = new Date(deadline);
-            if (expiresAt) memo.expiresAt = new Date(expiresAt);
+        // Allow status changes
+        if (status && Object.values(memoStatus).includes(status)) {
+            console.log('Backend: Updating status from', memo.status, 'to', status);
+            memo.status = status;
         }
 
         // Handle recipients update
         if (recipients && Array.isArray(recipients)) {
+            console.log('Backend: Updating recipients');
             // For non-admin users, validate recipients
-            if (req.user.role.name !== 'admin') {
+            if (!isAdmin) {
                 const validRecipients = await User.find({
                     _id: { $in: recipients },
                     $or: [
@@ -348,6 +415,7 @@ export const updateMemo = async (req, res, next) => {
                 }).select('_id');
 
                 if (validRecipients.length !== recipients.length) {
+                    console.log('Backend: Not authorized to add all specified recipients');
                     throw new ForbiddenError('Not authorized to add all specified recipients');
                 }
             }
@@ -359,17 +427,41 @@ export const updateMemo = async (req, res, next) => {
             );
         }
 
-        await memo.save();
+        console.log('Backend: Saving memo updates');
+        console.log('Backend: Memo before save:', {
+            title: memo.title,
+            content: memo.content,
+            severity: memo.severity,
+            status: memo.status,
+            expiresAt: memo.expiresAt
+        });
+
+        const savedMemo = await memo.save();
+        console.log('Backend: Memo updated successfully, new values:', {
+            title: savedMemo.title,
+            content: savedMemo.content,
+            severity: savedMemo.severity,
+            status: savedMemo.status,
+            expiresAt: savedMemo.expiresAt
+        });
 
         // Emit real-time update
         io.emit('memo_updated', memo);
 
         const populatedMemo = await memo.populate(['createdBy', 'recipients']);
-        await AuditService.createAuditLog({
-            user: req.user._id,
-            action: 'memo_updated',
-            details: { memoId: memo._id, title: memo.title }
-        });
+
+        // Try to create audit log, but don't fail the request if it fails
+        try {
+            await AuditService.createAuditLog({
+                user: req.user._id,
+                action: 'memo_updated',
+                details: { memoId: memo._id, title: memo.title }
+            });
+        } catch (auditError) {
+            console.log('Backend: Audit log creation failed:', auditError.message);
+        }
+
+        console.log('Backend: Sending success response');
         successResponse(res, populatedMemo, 'Memo updated successfully');
     } catch (error) {
         errorResponse(res, error, 'Failed to update memo');
@@ -383,19 +475,30 @@ export const updateMemo = async (req, res, next) => {
  */
 export const deleteMemo = async (req, res, next) => {
     try {
+        console.log('Backend: Deleting memo:', req.params.memoId, 'by user:', req.user._id);
         const memo = await Memo.findById(req.params.memoId);
 
         if (!memo) {
+            console.log('Backend: Memo not found');
             throw new NotFoundError('Memo not found');
         }
 
-        if (!memo.createdBy.equals(req.user._id)) {
+        console.log('Backend: Found memo, checking permissions. Creator:', memo.createdBy, 'User:', req.user._id, 'User role:', req.user.role?.name);
+
+        // Check if user is admin or the creator
+        const isAdmin = req.user.role?.name === 'admin';
+        const isCreator = memo.createdBy.equals(req.user._id);
+
+        if (!isAdmin && !isCreator) {
+            console.log('Backend: User not authorized to delete memo');
             throw new ForbiddenError('You are not authorized to delete this memo');
         }
 
         // Soft delete by updating status
+        console.log('Backend: Soft deleting memo');
         memo.status = 'deleted';
         await memo.save();
+        console.log('Backend: Memo deleted successfully');
 
         // Or hard delete if needed
         // await Memo.findByIdAndDelete(req.params.id);

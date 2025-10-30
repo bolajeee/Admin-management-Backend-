@@ -90,6 +90,62 @@ router.post("/signup", sanitizeInput, protectRoute, authorize(['admin']), asyncH
 
 /**
  * @swagger
+ * /auth/register:
+ *   post:
+ *     summary: Register a new user (Admin only) - Alias for signup
+ *     tags: [Authentication]
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - fullName
+ *               - email
+ *               - password
+ *             properties:
+ *               fullName:
+ *                 type: string
+ *                 example: "John Doe"
+ *               email:
+ *                 type: string
+ *                 format: email
+ *                 example: "john.doe@example.com"
+ *               password:
+ *                 type: string
+ *                 minLength: 6
+ *                 example: "password123"
+ *               role:
+ *                 type: string
+ *                 enum: [admin, employee]
+ *                 default: employee
+ *     responses:
+ *       201:
+ *         description: User created successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               allOf:
+ *                 - $ref: '#/components/schemas/Success'
+ *                 - type: object
+ *                   properties:
+ *                     data:
+ *                       $ref: '#/components/schemas/User'
+ *       400:
+ *         $ref: '#/components/responses/BadRequest'
+ *       401:
+ *         $ref: '#/components/responses/Unauthorized'
+ *       403:
+ *         $ref: '#/components/responses/Forbidden'
+ */
+router.post("/register", sanitizeInput, protectRoute, authorize(['admin']), asyncHandler(signupUser));
+
+/**
+ * @swagger
  * /auth/login:
  *   post:
  *     summary: Login user

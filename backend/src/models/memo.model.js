@@ -67,7 +67,6 @@ const memoSchema = new mongoose.Schema({
     recipients: [{
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User',
-        required: true,
         index: true
     }],
     createdBy: {
@@ -113,13 +112,25 @@ const memoSchema = new mongoose.Schema({
 }, {
     timestamps: true,
     toJSON: {
+        virtuals: true,
         transform: function (doc, ret) {
             ret.id = ret._id;
             delete ret._id;
             delete ret.__v;
             return ret;
         }
-    }
+    },
+    toObject: { virtuals: true }
+});
+
+// Virtual for read count
+memoSchema.virtual('readCount').get(function () {
+    return this.readBy ? this.readBy.length : 0;
+});
+
+// Virtual for acknowledged count
+memoSchema.virtual('acknowledgedCount').get(function () {
+    return this.acknowledgments ? this.acknowledgments.filter(ack => ack.status === 'acknowledged').length : 0;
 });
 
 // Index for fast lookups

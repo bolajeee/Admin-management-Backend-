@@ -1,7 +1,7 @@
 import express from "express";
 import { getSuggestedActions, getAllUsers } from "../controllers/admin.controller.js";
 import { protectRoute, authorize } from "../middleware/auth.middleware.js";
-import { toggleUserActive, resetUserPassword, deleteUser, getUserStats } from '../controllers/auth.controller.js';
+import { toggleUserActive, resetUserPassword, deleteUser, getUserStats, createUser } from '../controllers/auth.controller.js';
 import { sanitizeInput } from "../middleware/sanitization.middleware.js";
 import { asyncHandler } from '../middleware/errorHandler.middleware.js';
 import { validateObjectId, validatePagination } from '../middleware/validation.middleware.js';
@@ -116,6 +116,62 @@ router.get("/suggested-actions", protectRoute, asyncHandler(getSuggestedActions)
  *         $ref: '#/components/responses/Forbidden'
  */
 router.get('/users', protectRoute, authorize(['admin']), validatePagination, asyncHandler(getAllUsers));
+
+/**
+ * @swagger
+ * /admin/users:
+ *   post:
+ *     summary: Create a new user (Admin only)
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - fullName
+ *               - email
+ *               - password
+ *             properties:
+ *               fullName:
+ *                 type: string
+ *                 example: "John Doe"
+ *               email:
+ *                 type: string
+ *                 format: email
+ *                 example: "john.doe@example.com"
+ *               password:
+ *                 type: string
+ *                 minLength: 6
+ *                 example: "password123"
+ *               role:
+ *                 type: string
+ *                 enum: [admin, employee]
+ *                 default: employee
+ *     responses:
+ *       201:
+ *         description: User created successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               allOf:
+ *                 - $ref: '#/components/schemas/Success'
+ *                 - type: object
+ *                   properties:
+ *                     data:
+ *                       $ref: '#/components/schemas/User'
+ *       400:
+ *         $ref: '#/components/responses/BadRequest'
+ *       401:
+ *         $ref: '#/components/responses/Unauthorized'
+ *       403:
+ *         $ref: '#/components/responses/Forbidden'
+ */
+router.post('/users', sanitizeInput, protectRoute, authorize(['admin']), asyncHandler(createUser));
 
 /**
  * @swagger
