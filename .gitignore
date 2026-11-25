@@ -1,0 +1,4 @@
+
+# local env files (secrets)
+.env*
+!.env*.example
